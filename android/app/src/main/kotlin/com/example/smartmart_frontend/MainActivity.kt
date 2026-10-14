@@ -1,0 +1,5 @@
+package com.example.smartmart_frontend
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()
