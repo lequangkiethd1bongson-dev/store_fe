@@ -1,17 +1,37 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/store_models.dart';
+import '../services/product_service.dart';
 
 /// quản lý trạng thái giỏ hàng và đơn mua mẫu dùng chung trong ứng dụng.
+///
+/// BƯỚC 5 — gọi [ProductService] để lấy sản phẩm từ backend, cập nhật
+/// danh sách [products] cùng trạng thái [isLoading] / [errorMessage].
 class StoreController extends ChangeNotifier {
   StoreController({
-    required this.products,
+    required List<Product> products,
     Map<String, int> initialCart = const {},
-  }) : _quantities = Map<String, int>.from(initialCart);
+    ProductService? productService,
+  }) : _products = List<Product>.of(products),
+       _quantities = Map<String, int>.from(initialCart),
+       _productService = productService ?? ProductService();
 
-  final List<Product> products;
+  final ProductService _productService;
+  List<Product> _products;
   final Map<String, int> _quantities;
   final List<StoreOrder> _orders = [];
+  bool _isLoading = false;
+  String? _errorMessage;
+  bool _loadedFromApi = false;
+
+  /// danh sách sản phẩm đang hiển thị, lấy từ api hoặc dữ liệu mẫu.
+  List<Product> get products => List.unmodifiable(_products);
+  /// cho biết đang chờ backend trả danh sách sản phẩm.
+  bool get isLoading => _isLoading;
+  /// nội dung lỗi của lần tải gần nhất, null nếu thành công.
+  String? get errorMessage => _errorMessage;
+  /// cho biết danh sách hiện tại đã lấy được từ backend hay chưa.
+  bool get loadedFromApi => _loadedFromApi;
 
   /// trả về bản sao chỉ đọc của số lượng từng sản phẩm trong giỏ.
   Map<String, int> get quantities => Map.unmodifiable(_quantities);
@@ -22,13 +42,16 @@ class StoreController extends ChangeNotifier {
       _quantities.values.fold(0, (sum, quantity) => sum + quantity);
 
   /// tạo các dòng hàng từ mã sản phẩm và số lượng hiện có trong giỏ.
-  List<CartLine> get cartLines => _quantities.entries
-      .where((entry) => entry.value > 0)
-      .map(
-        (entry) =>
-            CartLine(product: productById(entry.key), quantity: entry.value),
-      )
-      .toList(growable: false);
+  /// bỏ qua mã không còn trong danh sách để không lỗi khi dữ liệu đổi.
+  List<CartLine> get cartLines {
+    final byId = {for (final product in _products) product.id: product};
+    return _quantities.entries
+        .where((entry) => entry.value > 0 && byId.containsKey(entry.key))
+        .map(
+          (entry) => CartLine(product: byId[entry.key]!, quantity: entry.value),
+        )
+        .toList(growable: false);
+  }
 
   /// cộng thành tiền của tất cả dòng hàng trong giỏ.
   int get subtotal => cartLines.fold(0, (sum, line) => sum + line.total);
@@ -37,15 +60,40 @@ class StoreController extends ChangeNotifier {
   /// tính tổng tiền hàng và phí giao hàng mẫu.
   int get total => subtotal + deliveryFee;
 
-  /// mô phỏng tải lại dữ liệu bằng một khoảng chờ ngắn rồi báo giao diện cập nhật.
-  Future<void> refreshDemoData() async {
-    await Future<void>.delayed(const Duration(milliseconds: 450));
+  /// gọi api `GET /products` rồi thay danh sách sản phẩm trên giao diện.
+  ///
+  /// nếu backend chưa chạy hoặc lỗi, giữ nguyên dữ liệu đang có (dữ liệu
+  /// mẫu) và lưu lỗi vào [errorMessage] để ứng dụng vẫn dùng được.
+  Future<void> loadProducts({String? category, String? keyword}) async {
+    if (_isLoading) return;
+    _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
+    try {
+      final result = await _productService.getProducts(
+        category: category,
+        keyword: keyword,
+      );
+      _products = List<Product>.of(result);
+      _loadedFromApi = true;
+      // xóa khỏi giỏ các sản phẩm mà backend không còn trả về.
+      final ids = _products.map((product) => product.id).toSet();
+      _quantities.removeWhere((id, _) => !ids.contains(id));
+    } catch (error) {
+      _errorMessage = error.toString();
+      debugPrint('Không tải được sản phẩm từ API: $error');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
+
+  /// tải lại sản phẩm từ backend khi người dùng kéo để làm mới.
+  Future<void> refreshDemoData() => loadProducts();
 
   /// tìm sản phẩm theo mã định danh hoặc báo lỗi nếu mã không tồn tại.
   Product productById(String id) =>
-      products.firstWhere((product) => product.id == id);
+      _products.firstWhere((product) => product.id == id);
 
   /// thêm số lượng sản phẩm vào giỏ rồi thông báo các màn hình đang nghe.
   void addToCart(Product product, {int quantity = 1}) {

@@ -1,39 +1,64 @@
 /// lưu thông tin sản phẩm, dòng giỏ hàng và đơn mua trong ứng dụng.
-class Product {
-  const Product({
+///
+/// class `Product` đã được chuyển sang `product.dart` (bước 3) để chỉ còn
+/// một định nghĩa duy nhất; export lại ở đây để các màn hình cũ vẫn import
+/// `store_models.dart` như trước.
+library;
+
+import 'product.dart';
+
+export 'product.dart';
+
+/// phân quyền tài khoản người dùng trong hệ thống.
+enum UserRole {
+  customer,
+  staff;
+
+  static UserRole fromString(String? role) {
+    final clean = (role ?? '').toUpperCase();
+    return clean.contains('STAFF') ? UserRole.staff : UserRole.customer;
+  }
+}
+
+/// thông tin tài khoản sau khi đăng nhập thành công từ backend.
+class AppUser {
+  const AppUser({
     required this.id,
     required this.name,
-    required this.price,
-    required this.rating,
-    required this.category,
-    required this.imageUrl,
-    this.oldPrice,
-    this.barcode,
-    this.brand,
-    this.packageSize,
-    this.description,
-    this.stock = 24,
+    required this.email,
+    this.phone,
+    this.role = UserRole.customer,
   });
 
   final String id;
   final String name;
-  final int price;
-  final int? oldPrice;
-  final String? barcode;
-  final double rating;
-  final String category;
-  final String imageUrl;
-  final String? brand;
-  final String? packageSize;
-  final String? description;
-  final int stock;
+  final String email;
+  final String? phone;
+  final UserRole role;
 
-  /// tính phần trăm giảm giá nếu giá cũ lớn hơn giá hiện tại.
-  int? get discountPercent {
-    final previousPrice = oldPrice;
-    if (previousPrice == null || previousPrice <= price) return null;
-    return ((previousPrice - price) / previousPrice * 100).round();
+  /// kiểm tra người dùng có phải nhân viên siêu thị không.
+  bool get isStaff => role == UserRole.staff;
+
+  /// kiểm tra người dùng là khách hàng thông thường.
+  bool get isCustomer => role == UserRole.customer;
+
+  factory AppUser.fromJson(Map<String, dynamic> json) {
+    return AppUser(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      phone: json['phone']?.toString(),
+      role: UserRole.fromString(json['role']?.toString()),
+    );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'email': email,
+    'phone': phone,
+    'role': role == UserRole.staff ? 'STAFF' : 'CUSTOMER',
+  };
 }
 
 /// biểu diễn một sản phẩm cùng số lượng đang có trong giỏ hoặc đơn hàng.

@@ -91,6 +91,10 @@ void main() {
   testWidgets('employee area opens from account menu and keeps shopper app', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(412, 915);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await _pumpReadyApp(tester);
     await tester.tap(find.bySemanticsLabel('Mở menu tài khoản'));
     await tester.pumpAndSettle();

@@ -39,7 +39,9 @@ class _SmartMartAppState extends State<SmartMartApp> {
   String _userName = '';
   String _userEmail = '';
 
-  /// khởi tạo các bộ quản lý dữ liệu được dùng chung giữa các màn hình.
+  /// BƯỚC 7 — khởi tạo các bộ quản lý dữ liệu dùng chung giữa các màn hình.
+  /// Dự án hiện quản lý trạng thái bằng ChangeNotifier + AnimatedBuilder.
+  /// Nếu sau này chuyển sang Provider / Riverpod / Bloc thì đăng ký tại đây.
   @override
   void initState() {
     super.initState();

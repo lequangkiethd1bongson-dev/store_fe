@@ -43,11 +43,15 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showPromo = false;
 
   /// khởi tạo bộ điều khiển tìm kiếm và dữ liệu giao diện của trang.
+  ///
+  /// BƯỚC 6 — sau khung hình đầu tiên thì gọi tải sản phẩm từ backend.
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _showPromo = true);
+      if (!mounted) return;
+      setState(() => _showPromo = true);
+      if (!widget.store.loadedFromApi) widget.store.loadProducts();
     });
   }
 
@@ -207,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onAction: () => widget.onOpenProducts('Rau củ quả'),
                 ),
                 _HorizontalProducts(
-                  products: sampleProducts.take(4).toList(),
+                  products: widget.store.products.take(4).toList(),
                   store: widget.store,
                   onOpenProduct: widget.onOpenProduct,
                 ),
@@ -217,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onAction: () => widget.onOpenProducts('Rau củ quả'),
                 ),
                 _ProductGrid(
-                  products: sampleProducts.take(4).toList(),
+                  products: widget.store.products.take(4).toList(),
                   store: widget.store,
                   onOpenProduct: widget.onOpenProduct,
                 ),
