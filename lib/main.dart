@@ -38,6 +38,7 @@ class _SmartMartAppState extends State<SmartMartApp> {
   bool _showLoginWelcome = false;
   String _userName = '';
   String _userEmail = '';
+  String _userRole = 'CUSTOMER';
 
   /// BƯỚC 7 — khởi tạo các bộ quản lý dữ liệu dùng chung giữa các màn hình.
   /// Dự án hiện quản lý trạng thái bằng ChangeNotifier + AnimatedBuilder.
@@ -60,9 +61,48 @@ class _SmartMartAppState extends State<SmartMartApp> {
     super.dispose();
   }
 
-  /// chọn màn hình khởi động, đăng nhập, chào mừng hoặc khu mua sắm.
+  /// chọn màn hình khởi động, đăng nhập, chào mừng hoặc khu mua sắm theo đúng vai trò.
   @override
   Widget build(BuildContext context) {
+    Widget homeWidget;
+    if (_showStartupAnimation) {
+      homeWidget = BrandAnimationScreen(
+        title: '',
+        subtitle: 'Đang chuẩn bị trải nghiệm mua sắm của bạn',
+        onFinished: _finishStartup,
+      );
+    } else if (!_isLoggedIn) {
+      homeWidget = LoginScreen(onComplete: _completeInitialLogin);
+    } else if (_showLoginWelcome) {
+      homeWidget = WelcomeScreen(
+        userName: _userName,
+        onFinished: () {
+          if (mounted) setState(() => _showLoginWelcome = false);
+        },
+      );
+    } else if (_userRole == 'SALES_STAFF') {
+      homeWidget = SalesStaffWorkspace(
+        controller: _staffController,
+        staffName: _userName,
+        onExit: () => _updateSession(null, null),
+      );
+    } else if (_userRole == 'WAREHOUSE_STAFF') {
+      homeWidget = WarehouseStaffWorkspace(
+        controller: _staffController,
+        staffName: _userName,
+        onExit: () => _updateSession(null, null),
+      );
+    } else {
+      homeWidget = RootShell(
+        store: _store,
+        staffController: _staffController,
+        initialUserName: _userName,
+        initialUserEmail: _userEmail,
+        initialUserRole: _userRole,
+        onAuthChanged: _updateSession,
+      );
+    }
+
     return MaterialApp(
       title: 'SSM4',
       debugShowCheckedModeBanner: false,
@@ -70,28 +110,7 @@ class _SmartMartAppState extends State<SmartMartApp> {
       scrollBehavior: const _FixedScrollBehavior(),
       home: AnimatedBuilder(
         animation: _store,
-        builder: (context, _) => _showStartupAnimation
-            ? BrandAnimationScreen(
-                title: '',
-                subtitle: 'Đang chuẩn bị trải nghiệm mua sắm của bạn',
-                onFinished: _finishStartup,
-              )
-            : !_isLoggedIn
-            ? LoginScreen(onComplete: _completeInitialLogin)
-            : _showLoginWelcome
-            ? WelcomeScreen(
-                userName: _userName,
-                onFinished: () {
-                  if (mounted) setState(() => _showLoginWelcome = false);
-                },
-              )
-            : RootShell(
-                store: _store,
-                staffController: _staffController,
-                initialUserName: _userName,
-                initialUserEmail: _userEmail,
-                onAuthChanged: _updateSession,
-              ),
+        builder: (context, _) => homeWidget,
       ),
     );
   }
@@ -104,45 +123,50 @@ class _SmartMartAppState extends State<SmartMartApp> {
       _isLoggedIn = preferences.getBool('session.loggedIn') ?? false;
       _userName = preferences.getString('session.userName') ?? '';
       _userEmail = preferences.getString('session.userEmail') ?? '';
+      _userRole = preferences.getString('session.userRole') ?? 'CUSTOMER';
       _showStartupAnimation = false;
     });
   }
 
   /// chuyển sang trạng thái chào mừng rồi lưu phiên đăng nhập ban đầu.
-  Future<void> _completeInitialLogin(String name, String email) async {
+  Future<void> _completeInitialLogin(String name, String email, String role) async {
     if (mounted) setState(() => _showLoginWelcome = true);
-    await _updateSession(name, email);
+    await _updateSession(name, email, role);
   }
 
   /// lưu hoặc xóa phiên đăng nhập mẫu trong bộ nhớ thiết bị.
-  Future<void> _updateSession(String? name, String? email) async {
+  Future<void> _updateSession(String? name, String? email, [String? role]) async {
     final preferences = await SharedPreferences.getInstance();
     if (name == null || email == null) {
       await preferences.remove('session.loggedIn');
       await preferences.remove('session.userName');
       await preferences.remove('session.userEmail');
+      await preferences.remove('session.userRole');
     } else {
       await preferences.setBool('session.loggedIn', true);
       await preferences.setString('session.userName', name);
       await preferences.setString('session.userEmail', email);
+      await preferences.setString('session.userRole', role ?? 'CUSTOMER');
     }
     if (!mounted) return;
     setState(() {
       _isLoggedIn = name != null && email != null;
       _userName = name ?? '';
       _userEmail = email ?? '';
+      _userRole = role ?? 'CUSTOMER';
       if (!_isLoggedIn) _showLoginWelcome = false;
     });
   }
 }
 
-/// giữ dữ liệu và điều hướng chính của khu vực mua sắm.
+/// giữ dữ liệu và điều hướng chính của khu vực mua sắm (Giao diện Khách hàng - Customer UI).
 class RootShell extends StatefulWidget {
   const RootShell({
     required this.store,
     required this.staffController,
     required this.initialUserName,
     required this.initialUserEmail,
+    this.initialUserRole = 'CUSTOMER',
     required this.onAuthChanged,
     super.key,
   });
@@ -151,7 +175,8 @@ class RootShell extends StatefulWidget {
   final StaffController staffController;
   final String initialUserName;
   final String initialUserEmail;
-  final Future<void> Function(String?, String?) onAuthChanged;
+  final String initialUserRole;
+  final Future<void> Function(String?, String?, [String?]) onAuthChanged;
 
   /// tạo trạng thái điều hướng chính cho khu vực mua sắm.
   /// liên kết thanh điều hướng với trạng thái của nó.
@@ -325,12 +350,13 @@ class _RootShellState extends State<RootShell> {
 
   /// mở màn hình đăng nhập và cập nhật thông tin khi người dùng hoàn tất.
   Future<void> _openLogin() async {
-    final credentials = await Navigator.of(context).push<(String, String)>(
-      PageRouteBuilder<(String, String)>(
+    final credentials = await Navigator.of(context).push<(String, String, String)>(
+      PageRouteBuilder<(String, String, String)>(
         transitionDuration: const Duration(milliseconds: 420),
         reverseTransitionDuration: const Duration(milliseconds: 300),
         pageBuilder: (context, animation, secondaryAnimation) => LoginScreen(
-          onComplete: (name, email) => Navigator.of(context).pop((name, email)),
+          onComplete: (name, email, role) =>
+              Navigator.of(context).pop((name, email, role)),
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) =>
             FadeTransition(
@@ -353,7 +379,7 @@ class _RootShellState extends State<RootShell> {
     );
     if (credentials == null || !mounted) return;
 
-    await widget.onAuthChanged(credentials.$1, credentials.$2);
+    await widget.onAuthChanged(credentials.$1, credentials.$2, credentials.$3);
     if (!mounted) return;
     setState(() {
       _userName = credentials.$1;
@@ -407,10 +433,9 @@ class _RootShellState extends State<RootShell> {
     );
   }
 
-  /// mở menu tài khoản và xử lý yêu cầu đăng nhập hoặc vào khu nhân viên.
+  /// mở menu tài khoản và xử lý yêu cầu đăng nhập.
   Future<void> _showSideMenu() async {
     var shouldOpenLogin = false;
-    var shouldOpenStaff = false;
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -435,10 +460,6 @@ class _RootShellState extends State<RootShell> {
                 shouldOpenLogin = true;
                 Navigator.of(context).pop();
               },
-              onOpenStaff: () {
-                shouldOpenStaff = true;
-                Navigator.of(context).pop();
-              },
             ),
           ),
         ),
@@ -459,17 +480,6 @@ class _RootShellState extends State<RootShell> {
           ),
     );
     if (shouldOpenLogin && mounted) _openLogin();
-    if (shouldOpenStaff && mounted) {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => StaffWorkspace(
-            controller: widget.staffController,
-            staffName: _userName,
-            onExit: () => Navigator.of(context).pop(),
-          ),
-        ),
-      );
-    }
   }
 }
 
@@ -676,7 +686,6 @@ class _SideMenu extends StatelessWidget {
     required this.isLoggedIn,
     required this.onSelect,
     required this.onLogin,
-    required this.onOpenStaff,
   });
 
   final String userName;
@@ -684,7 +693,6 @@ class _SideMenu extends StatelessWidget {
   final bool isLoggedIn;
   final ValueChanged<int> onSelect;
   final VoidCallback onLogin;
-  final VoidCallback onOpenStaff;
 
   /// dựng menu tài khoản trượt bên cạnh với các lối tắt trong ứng dụng.
   @override
@@ -777,12 +785,6 @@ class _SideMenu extends StatelessWidget {
               icon: Icons.person_outline_rounded,
               title: 'Tài khoản',
               onTap: () => onSelect(4),
-            ),
-            _SideMenuItem(
-              key: const ValueKey('open-staff-workspace'),
-              icon: Icons.warehouse_outlined,
-              title: 'Khu vực nhân viên · Demo',
-              onTap: onOpenStaff,
             ),
             const Spacer(),
             Padding(

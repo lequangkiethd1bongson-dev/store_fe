@@ -39,7 +39,10 @@ class _StaffWorkspaceState extends State<StaffWorkspace> {
       ),
       _StaffInventoryScreen(controller: widget.controller),
       _StaffSalesScreen(controller: widget.controller),
-      _StaffAttendanceScreen(staffName: widget.staffName),
+      _StaffAttendanceScreen(
+        staffName: widget.staffName,
+        roleTitle: 'Nhân viên Siêu thị',
+      ),
     ];
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -91,6 +94,214 @@ class _StaffWorkspaceState extends State<StaffWorkspace> {
             icon: Icon(Icons.point_of_sale_outlined),
             selectedIcon: Icon(Icons.point_of_sale_rounded),
             label: 'Bán hàng',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.schedule_outlined),
+            selectedIcon: Icon(Icons.schedule_rounded),
+            label: 'Chấm công',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// GIAO DIỆN PHÂN QUYỀN: 1. Giao diện dành riêng cho Nhân viên Bán hàng (Sales Staff UI)
+/// Chỉ chứa các nghiệp vụ: Sơ đồ kệ, Bán hàng POS tại quầy, Chấm công.
+class SalesStaffWorkspace extends StatefulWidget {
+  const SalesStaffWorkspace({
+    required this.controller,
+    required this.staffName,
+    required this.onExit,
+    super.key,
+  });
+
+  final StaffController controller;
+  final String staffName;
+  final VoidCallback onExit;
+
+  @override
+  State<SalesStaffWorkspace> createState() => _SalesStaffWorkspaceState();
+}
+
+class _SalesStaffWorkspaceState extends State<SalesStaffWorkspace> {
+  int _selectedTab = 0;
+
+  static const _titles = ['Sơ đồ kệ', 'Bán hàng POS', 'Chấm công'];
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = [
+      _StaffDashboard(
+        controller: widget.controller,
+        onOpenTab: (index) {
+          if (index == 2) setState(() => _selectedTab = 1);
+        },
+      ),
+      _StaffSalesScreen(controller: widget.controller),
+      _StaffAttendanceScreen(
+        staffName: widget.staffName,
+        roleTitle: 'Nhân viên Bán hàng',
+      ),
+    ];
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_titles[_selectedTab]),
+            const Text(
+              'NV Bán hàng',
+              style: TextStyle(fontSize: 10, color: Colors.white70),
+            ),
+          ],
+        ),
+        leading: IconButton(
+          key: const ValueKey('sales-staff-exit'),
+          tooltip: 'Thoát giao diện bán hàng',
+          onPressed: widget.onExit,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: CircleAvatar(
+              radius: 17,
+              backgroundColor: AppColors.blue50,
+              child: Text(
+                widget.staffName.isEmpty
+                    ? 'BH'
+                    : widget.staffName.characters.first.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.blue800,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: IndexedStack(index: _selectedTab, children: pages),
+      bottomNavigationBar: NavigationBar(
+        key: const ValueKey('sales-staff-navigation'),
+        selectedIndex: _selectedTab,
+        onDestinationSelected: (index) => setState(() => _selectedTab = index),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard_rounded),
+            label: 'Sơ đồ kệ',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.point_of_sale_outlined),
+            selectedIcon: Icon(Icons.point_of_sale_rounded),
+            label: 'Bán hàng',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.schedule_outlined),
+            selectedIcon: Icon(Icons.schedule_rounded),
+            label: 'Chấm công',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// GIAO DIỆN PHÂN QUYỀN: 2. Giao diện dành riêng cho Nhân viên Kho (Warehouse Staff UI)
+/// Chỉ chứa các nghiệp vụ: Quản lý & nhập kho hàng, Sơ đồ kệ, Chấm công.
+class WarehouseStaffWorkspace extends StatefulWidget {
+  const WarehouseStaffWorkspace({
+    required this.controller,
+    required this.staffName,
+    required this.onExit,
+    super.key,
+  });
+
+  final StaffController controller;
+  final String staffName;
+  final VoidCallback onExit;
+
+  @override
+  State<WarehouseStaffWorkspace> createState() => _WarehouseStaffWorkspaceState();
+}
+
+class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
+  int _selectedTab = 0;
+
+  static const _titles = ['Kho hàng', 'Sơ đồ kệ', 'Chấm công'];
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = [
+      _StaffInventoryScreen(controller: widget.controller),
+      _StaffDashboard(
+        controller: widget.controller,
+        onOpenTab: (index) {
+          if (index == 1) setState(() => _selectedTab = 0);
+        },
+      ),
+      _StaffAttendanceScreen(
+        staffName: widget.staffName,
+        roleTitle: 'Nhân viên Kho',
+      ),
+    ];
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_titles[_selectedTab]),
+            const Text(
+              'NV Kho',
+              style: TextStyle(fontSize: 10, color: Colors.white70),
+            ),
+          ],
+        ),
+        leading: IconButton(
+          key: const ValueKey('warehouse-staff-exit'),
+          tooltip: 'Thoát giao diện kho',
+          onPressed: widget.onExit,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: CircleAvatar(
+              radius: 17,
+              backgroundColor: AppColors.blue50,
+              child: Text(
+                widget.staffName.isEmpty
+                    ? 'KHO'
+                    : widget.staffName.characters.first.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.blue800,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: IndexedStack(index: _selectedTab, children: pages),
+      bottomNavigationBar: NavigationBar(
+        key: const ValueKey('warehouse-staff-navigation'),
+        selectedIndex: _selectedTab,
+        onDestinationSelected: (index) => setState(() => _selectedTab = index),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2_rounded),
+            label: 'Kho hàng',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard_rounded),
+            label: 'Sơ đồ kệ',
           ),
           NavigationDestination(
             icon: Icon(Icons.schedule_outlined),
@@ -1581,70 +1792,562 @@ class _SaleLine extends StatelessWidget {
   }
 }
 
-class _StaffAttendanceScreen extends StatelessWidget {
-  const _StaffAttendanceScreen({required this.staffName});
+/// Giao diện Chấm công / Điểm danh ca làm việc dành cho NV Bán hàng và NV Kho.
+class _StaffAttendanceScreen extends StatefulWidget {
+  const _StaffAttendanceScreen({
+    required this.staffName,
+    this.roleTitle = 'Nhân viên Siêu thị',
+  });
 
   final String staffName;
+  final String roleTitle;
 
-  /// hiển thị trang chấm công mẫu đang chờ kết nối dữ liệu thật.
+  @override
+  State<_StaffAttendanceScreen> createState() => _StaffAttendanceScreenState();
+}
+
+class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
+  bool _isCheckedIn = false;
+  DateTime? _checkInTime;
+
+  final List<Map<String, String>> _history = [
+    {
+      'date': 'Hôm qua (23/10/2023)',
+      'checkIn': '07:01',
+      'checkOut': '15:02',
+      'shift': 'Ca sáng (07:00 - 15:00)',
+      'status': 'Đúng giờ',
+    },
+    {
+      'date': '22/10/2023',
+      'checkIn': '06:58',
+      'checkOut': '15:00',
+      'shift': 'Ca sáng (07:00 - 15:00)',
+      'status': 'Đúng giờ',
+    },
+    {
+      'date': '21/10/2023',
+      'checkIn': '14:55',
+      'checkOut': '23:05',
+      'shift': 'Ca chiều (15:00 - 23:00)',
+      'status': 'Tăng ca 5p',
+    },
+    {
+      'date': '20/10/2023',
+      'checkIn': '07:00',
+      'checkOut': '15:01',
+      'shift': 'Ca sáng (07:00 - 15:00)',
+      'status': 'Đúng giờ',
+    },
+  ];
+
+  void _handleAttendanceAction() {
+    final now = DateTime.now();
+    if (!_isCheckedIn) {
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(
+            Icons.fingerprint_rounded,
+            size: 44,
+            color: AppColors.blue700,
+          ),
+          title: const Text('Xác nhận Vào ca'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Nhân viên: ${widget.staffName.isEmpty ? 'Chưa đặt tên' : widget.staffName}'),
+              const SizedBox(height: 4),
+              Text('Vị trí: ${widget.roleTitle}'),
+              const SizedBox(height: 4),
+              Text('Thời gian: ${_formatTime(now)} — ${_formatDate(now)}'),
+              const SizedBox(height: 4),
+              Text('Địa điểm: ${widget.roleTitle.contains('Kho') ? 'Khu vực Kho hàng - SSM4' : 'Quầy Bán hàng POS 01'}'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.blue700),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                setState(() {
+                  _isCheckedIn = true;
+                  _checkInTime = now;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Vào ca thành công lúc ${_formatTime(now)}! Chúc bạn một ca làm hiệu quả.'),
+                    backgroundColor: Colors.green[700],
+                  ),
+                );
+              },
+              icon: const Icon(Icons.check_circle, color: Colors.white, size: 18),
+              label: const Text('Vào ca ngay', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: Icon(
+            Icons.logout_rounded,
+            size: 44,
+            color: Colors.orange[800],
+          ),
+          title: const Text('Xác nhận Ra ca'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Giờ vào ca: ${_checkInTime != null ? _formatTime(_checkInTime!) : '07:00'}'),
+              const SizedBox(height: 4),
+              Text('Giờ ra ca: ${_formatTime(now)}'),
+              const SizedBox(height: 4),
+              const Text('Tổng thời gian: ~8 giờ làm việc'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800]),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                final timeStr = _formatTime(now);
+                final checkInStr = _checkInTime != null ? _formatTime(_checkInTime!) : '07:00';
+                setState(() {
+                  _isCheckedIn = false;
+                  _history.insert(0, {
+                    'date': 'Hôm nay (${_formatDate(now)})',
+                    'checkIn': checkInStr,
+                    'checkOut': timeStr,
+                    'shift': 'Ca sáng (07:00 - 15:00)',
+                    'status': 'Hoàn thành ca',
+                  });
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Ra ca thành công lúc $timeStr. Đã ghi nhận công làm việc!'),
+                    backgroundColor: AppColors.blue700,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.check_circle, color: Colors.white, size: 18),
+              label: const Text('Xác nhận Ra ca', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  String _formatTime(DateTime date) =>
+      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+
+  String _formatDate(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Card Thẻ nhân viên & Trạng thái
         Container(
-          padding: const EdgeInsets.all(21),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.blue900, AppColors.blue700],
+            gradient: LinearGradient(
+              colors: _isCheckedIn
+                  ? [const Color(0xFF1B5E20), const Color(0xFF2E7D32)]
+                  : [AppColors.blue900, AppColors.blue700],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.blue900.withValues(alpha: 0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.access_time_filled_rounded,
-                color: Colors.white,
-                size: 32,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
+                        child: Text(
+                          widget.staffName.isNotEmpty
+                              ? widget.staffName[0].toUpperCase()
+                              : 'NV',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.staffName.isEmpty ? 'Nhân viên SSM4' : widget.staffName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            widget.roleTitle,
+                            style: const TextStyle(
+                              color: Color(0xFFDCEBFA),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _isCheckedIn
+                          ? Colors.greenAccent.shade400.withValues(alpha: 0.25)
+                          : Colors.amber.shade300.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: _isCheckedIn ? Colors.greenAccent : Colors.amberAccent,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _isCheckedIn ? Icons.check_circle : Icons.access_time_filled,
+                          color: _isCheckedIn ? Colors.greenAccent : Colors.amberAccent,
+                          size: 13,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _isCheckedIn ? 'Đang trong ca' : 'Chưa vào ca',
+                          style: TextStyle(
+                            color: _isCheckedIn ? Colors.greenAccent : Colors.amberAccent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 18),
+              const Divider(color: Colors.white24, height: 1),
               const SizedBox(height: 14),
-              Text(
-                'Xin chào, $staffName',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                '${now.day}/${now.month}/${now.year}',
-                style: const TextStyle(color: Color(0xFFDCEBFA), fontSize: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Ca làm việc hôm nay',
+                        style: TextStyle(color: Colors.white70, fontSize: 10),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Ca sáng (07:00 - 15:00)',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text(
+                        'Thời gian',
+                        style: TextStyle(color: Colors.white70, fontSize: 10),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${_formatTime(now)} — ${_formatDate(now)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
         ),
-        const SizedBox(height: 15),
+
+        const SizedBox(height: 16),
+
+        // Nút Thao tác Chấm công chính
         Card(
-          child: ListTile(
-            leading: const Icon(
-              Icons.schedule_rounded,
-              color: AppColors.blue700,
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _isCheckedIn ? Icons.logout_rounded : Icons.fingerprint_rounded,
+                      color: _isCheckedIn ? Colors.orange[800] : AppColors.blue700,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _isCheckedIn ? 'Kết thúc ca làm việc' : 'Điểm danh Vào ca',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            _isCheckedIn
+                                ? 'Đã vào ca lúc ${_checkInTime != null ? _formatTime(_checkInTime!) : '07:00'}. Nhấn để xác nhận Ra ca.'
+                                : 'Nhấn nút bên dưới để ghi nhận thời gian bắt đầu ca.',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isCheckedIn ? Colors.orange[800] : AppColors.blue700,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: _handleAttendanceAction,
+                    icon: Icon(
+                      _isCheckedIn ? Icons.logout_rounded : Icons.camera_front_rounded,
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      _isCheckedIn ? 'XÁC NHẬN RA CA (CHECK-OUT)' : 'XÁC NHẬN VÀO CA (CHECK-IN)',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            title: const Text(
-              'Chấm công',
-              style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Thống kê công trong tháng
+        const Text(
+          'Thống kê công tháng này',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                title: 'Số ngày công',
+                value: '22/26',
+                subtitle: 'ngày',
+                icon: Icons.calendar_today_rounded,
+                color: AppColors.blue700,
+              ),
             ),
-            subtitle: const Text(
-              'Giao diện chấm công sẽ được bổ sung sau.',
-              style: TextStyle(fontSize: 10),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatCard(
+                title: 'Tổng giờ làm',
+                value: '176',
+                subtitle: 'giờ',
+                icon: Icons.timer_outlined,
+                color: Colors.green[700]!,
+              ),
             ),
-            trailing: const Icon(Icons.lock_clock_outlined),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatCard(
+                title: 'Tăng ca',
+                value: '4.5',
+                subtitle: 'giờ',
+                icon: Icons.more_time_rounded,
+                color: Colors.orange[800]!,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 20),
+
+        // Lịch sử chấm công
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Lịch sử chấm công gần đây',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+            ),
+            Text(
+              '${_history.length} bản ghi',
+              style: const TextStyle(fontSize: 11, color: AppColors.muted),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        ..._history.map(
+          (item) => Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.blue50,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.verified_rounded,
+                  color: AppColors.blue700,
+                  size: 20,
+                ),
+              ),
+              title: Text(
+                item['date'] ?? '',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              ),
+              subtitle: Text(
+                'Vào: ${item['checkIn']}  |  Ra: ${item['checkOut']}\n${item['shift']}',
+                style: const TextStyle(fontSize: 10, color: AppColors.muted),
+              ),
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade300),
+                ),
+                child: Text(
+                  item['status'] ?? '',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.green.shade800,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 3),
+              Text(
+                subtitle,
+                style: const TextStyle(fontSize: 9, color: AppColors.muted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 9, color: AppColors.muted),
+          ),
+        ],
+      ),
     );
   }
 }

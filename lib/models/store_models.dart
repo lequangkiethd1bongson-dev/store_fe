@@ -12,11 +12,22 @@ export 'product.dart';
 /// phân quyền tài khoản người dùng trong hệ thống.
 enum UserRole {
   customer,
+  salesStaff,
+  warehouseStaff,
   staff;
 
   static UserRole fromString(String? role) {
     final clean = (role ?? '').toUpperCase();
-    return clean.contains('STAFF') ? UserRole.staff : UserRole.customer;
+    if (clean.contains('WAREHOUSE') || clean.contains('KHO')) {
+      return UserRole.warehouseStaff;
+    }
+    if (clean.contains('SALES') || clean.contains('BAN_HANG') || clean.contains('BANHANG')) {
+      return UserRole.salesStaff;
+    }
+    if (clean.contains('STAFF') || clean.contains('NHAN_VIEN')) {
+      return UserRole.salesStaff;
+    }
+    return UserRole.customer;
   }
 }
 
@@ -36,8 +47,17 @@ class AppUser {
   final String? phone;
   final UserRole role;
 
+  /// kiểm tra người dùng có phải nhân viên bán hàng không.
+  bool get isSalesStaff => role == UserRole.salesStaff;
+
+  /// kiểm tra người dùng có phải nhân viên kho không.
+  bool get isWarehouseStaff => role == UserRole.warehouseStaff;
+
   /// kiểm tra người dùng có phải nhân viên siêu thị không.
-  bool get isStaff => role == UserRole.staff;
+  bool get isStaff =>
+      role == UserRole.staff ||
+      role == UserRole.salesStaff ||
+      role == UserRole.warehouseStaff;
 
   /// kiểm tra người dùng là khách hàng thông thường.
   bool get isCustomer => role == UserRole.customer;
@@ -57,7 +77,13 @@ class AppUser {
     'name': name,
     'email': email,
     'phone': phone,
-    'role': role == UserRole.staff ? 'STAFF' : 'CUSTOMER',
+    'role': role == UserRole.salesStaff
+        ? 'SALES_STAFF'
+        : role == UserRole.warehouseStaff
+            ? 'WAREHOUSE_STAFF'
+            : role == UserRole.staff
+                ? 'STAFF'
+                : 'CUSTOMER',
   };
 }
 

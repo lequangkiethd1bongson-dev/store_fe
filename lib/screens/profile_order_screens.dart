@@ -687,7 +687,7 @@ class _AccountMenuItem extends StatelessWidget {
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.onComplete, super.key});
 
-  final void Function(String name, String email) onComplete;
+  final void Function(String name, String email, String role) onComplete;
 
   /// tạo trạng thái biểu mẫu đăng nhập và đăng ký.
   @override
@@ -699,6 +699,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _nameController = TextEditingController();
   final _accountController = TextEditingController();
   final _passwordController = TextEditingController();
+  String _selectedRole = 'CUSTOMER';
   bool _passwordVisible = false;
   bool _rememberMe = true;
   bool _isRegistering = false;
@@ -848,6 +849,35 @@ class _LoginScreenState extends State<LoginScreen> {
                             : null,
                       ),
                     ),
+                    const SizedBox(height: 14),
+                    _LoginFieldLabel(
+                      label: 'Vai trò tài khoản (Phân quyền UI)',
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _selectedRole,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.admin_panel_settings_outlined),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'CUSTOMER',
+                            child: Text('🛒 Khách hàng (Mua sắm)'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'SALES_STAFF',
+                            child: Text('🏷️ Nhân viên Bán hàng (POS & Kệ)'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'WAREHOUSE_STAFF',
+                            child: Text('📦 Nhân viên Kho (Nhập & Tồn kho)'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _selectedRole = value);
+                          }
+                        },
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -960,7 +990,7 @@ class _LoginScreenState extends State<LoginScreen> {
     await Future<void>.delayed(const Duration(milliseconds: 420));
     if (!mounted) return;
     setState(() => _isSubmitting = false);
-    widget.onComplete(name, account);
+    widget.onComplete(name, account, _selectedRole);
   }
 }
 
