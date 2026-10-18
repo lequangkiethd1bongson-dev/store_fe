@@ -5,6 +5,7 @@ import '../models/store_models.dart';
 import '../state/staff_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'kho_addproduct.dart';
 
 /// cung cấp không gian làm việc riêng cho các thao tác của nhân viên.
 class StaffWorkspace extends StatefulWidget {
@@ -1295,13 +1296,40 @@ class _StaffInventoryScreenState extends State<_StaffInventoryScreen> {
         children: [
           _InventorySummary(controller: controller),
           const SizedBox(height: 14),
-          FilledButton.icon(
-            key: const ValueKey('inventory-scan-receive'),
-            onPressed: () => _receiveStock(context, controller),
-            icon: const Icon(Icons.qr_code_scanner_rounded),
-            label: const Text('Quét mã vạch nhập kho'),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  key: const ValueKey('inventory-scan-receive'),
+                  onPressed: () => _receiveStock(context, controller),
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  label: const Text('Quét mã nhập kho'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.blue900,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                  ),
+                  onPressed: () => Navigator.of(context).push<Product>(
+                    MaterialPageRoute<Product>(
+                      builder: (_) => KhoAddProductScreen(
+                        controller: controller,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add_box_rounded, color: Colors.white, size: 18),
+                  label: const Text(
+                    'Thêm SP mới',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 9),
           const SizedBox(height: 20),
           const Text(
             'Sản phẩm trong kho',

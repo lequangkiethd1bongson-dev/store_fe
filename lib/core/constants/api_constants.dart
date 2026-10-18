@@ -18,7 +18,8 @@ class ApiConstants {
   /// `10.0.2.2` là địa chỉ máy tính khi chạy trên máy ảo android.
   /// chạy trên điện thoại thật thì đổi thành ip lan của máy chạy backend,
   /// ví dụ `http://192.168.1.10:8080/api`.
-  static const String baseUrl = 'http://10.0.2.2:8080/api';
+  ///static const String baseUrl = 'http://10.0.2.2:8080/api';
+  static const String baseUrl = 'http://192.168.1.25:8080/api';
 
   /// thời gian chờ tối đa cho một yêu cầu http.
   static const Duration timeout = Duration(seconds: 15);
