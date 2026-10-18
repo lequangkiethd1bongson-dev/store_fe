@@ -27,9 +27,9 @@ class StaffWorkspace extends StatefulWidget {
 class _StaffWorkspaceState extends State<StaffWorkspace> {
   int _selectedTab = 0;
 
-  static const _titles = ['Sơ đồ', 'Kho hàng', 'Bán hàng', 'Chấm công'];
+  static const _titles = ['Sơ đồ', 'Kho hàng', 'Bán hàng', 'Chấm công', 'Tài khoản'];
 
-  /// dựng nội dung tab nhân viên và thanh điều hướng bốn chức năng.
+  /// dựng nội dung tab nhân viên và thanh điều hướng năm chức năng.
   @override
   Widget build(BuildContext context) {
     final pages = [
@@ -42,6 +42,11 @@ class _StaffWorkspaceState extends State<StaffWorkspace> {
       _StaffAttendanceScreen(
         staffName: widget.staffName,
         roleTitle: 'Nhân viên Siêu thị',
+      ),
+      _StaffProfileScreen(
+        staffName: widget.staffName,
+        roleTitle: 'Nhân viên Siêu thị',
+        onLogout: widget.onExit,
       ),
     ];
     return Scaffold(
@@ -100,6 +105,11 @@ class _StaffWorkspaceState extends State<StaffWorkspace> {
             selectedIcon: Icon(Icons.schedule_rounded),
             label: 'Chấm công',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Tài khoản',
+          ),
         ],
       ),
     );
@@ -127,7 +137,7 @@ class SalesStaffWorkspace extends StatefulWidget {
 class _SalesStaffWorkspaceState extends State<SalesStaffWorkspace> {
   int _selectedTab = 0;
 
-  static const _titles = ['Sơ đồ kệ', 'Bán hàng POS', 'Chấm công'];
+  static const _titles = ['Sơ đồ kệ', 'Bán hàng POS', 'Chấm công', 'Tài khoản'];
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +152,11 @@ class _SalesStaffWorkspaceState extends State<SalesStaffWorkspace> {
       _StaffAttendanceScreen(
         staffName: widget.staffName,
         roleTitle: 'Nhân viên Bán hàng',
+      ),
+      _StaffProfileScreen(
+        staffName: widget.staffName,
+        roleTitle: 'Nhân viên Bán hàng',
+        onLogout: widget.onExit,
       ),
     ];
     return Scaffold(
@@ -204,6 +219,11 @@ class _SalesStaffWorkspaceState extends State<SalesStaffWorkspace> {
             selectedIcon: Icon(Icons.schedule_rounded),
             label: 'Chấm công',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Tài khoản',
+          ),
         ],
       ),
     );
@@ -231,7 +251,7 @@ class WarehouseStaffWorkspace extends StatefulWidget {
 class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
   int _selectedTab = 0;
 
-  static const _titles = ['Kho hàng', 'Sơ đồ kệ', 'Chấm công'];
+  static const _titles = ['Kho hàng', 'Sơ đồ kệ', 'Chấm công', 'Tài khoản'];
 
   @override
   Widget build(BuildContext context) {
@@ -246,6 +266,11 @@ class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
       _StaffAttendanceScreen(
         staffName: widget.staffName,
         roleTitle: 'Nhân viên Kho',
+      ),
+      _StaffProfileScreen(
+        staffName: widget.staffName,
+        roleTitle: 'Nhân viên Kho',
+        onLogout: widget.onExit,
       ),
     ];
     return Scaffold(
@@ -307,6 +332,11 @@ class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
             icon: Icon(Icons.schedule_outlined),
             selectedIcon: Icon(Icons.schedule_rounded),
             label: 'Chấm công',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Tài khoản',
           ),
         ],
       ),
@@ -2345,6 +2375,366 @@ class _StatCard extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(fontSize: 9, color: AppColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Màn hình Quản lý Tài khoản Cá nhân dành riêng cho Nhân viên (Sales & Warehouse Staff)
+class _StaffProfileScreen extends StatefulWidget {
+  const _StaffProfileScreen({
+    required this.staffName,
+    required this.roleTitle,
+    required this.onLogout,
+  });
+
+  final String staffName;
+  final String roleTitle;
+  final VoidCallback onLogout;
+
+  @override
+  State<_StaffProfileScreen> createState() => _StaffProfileScreenState();
+}
+
+class _StaffProfileScreenState extends State<_StaffProfileScreen> {
+  late String _phone = '0987 654 321';
+  late String _email = 'staff01@ssm4.com';
+  bool _notifyNewOrder = true;
+  bool _notifyLowStock = true;
+
+  void _showEditProfileDialog() {
+    final nameController = TextEditingController(
+      text: widget.staffName.isEmpty ? 'Nhân viên SSM4' : widget.staffName,
+    );
+    final phoneController = TextEditingController(text: _phone);
+    final emailController = TextEditingController(text: _email);
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Chỉnh sửa thông tin cá nhân'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Họ và tên'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: phoneController,
+              decoration: const InputDecoration(labelText: 'Số điện thoại'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(labelText: 'Email công việc'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.blue700),
+            onPressed: () {
+              setState(() {
+                _phone = phoneController.text.trim();
+                _email = emailController.text.trim();
+              });
+              Navigator.of(dialogContext).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Đã cập nhật thông tin cá nhân!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            child: const Text('Lưu thay đổi', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog() {
+    final oldPassController = TextEditingController();
+    final newPassController = TextEditingController();
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Đổi mật khẩu'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: oldPassController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Mật khẩu hiện tại'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: newPassController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Mật khẩu mới (ít nhất 6 ký tự)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.blue700),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Đã cập nhật mật khẩu thành công!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            child: const Text('Đổi mật khẩu', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName =
+        widget.staffName.isEmpty ? 'Nhân viên SSM4' : widget.staffName;
+    final staffId =
+        widget.roleTitle.contains('Kho') ? 'NV-KHO-8932' : 'NV-POS-1042';
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Header Hồ sơ Nhân viên
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppColors.blue900, AppColors.blue700],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.blue900.withValues(alpha: 0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 36,
+                backgroundColor: Colors.white.withValues(alpha: 0.2),
+                child: Text(
+                  displayName[0].toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                displayName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${widget.roleTitle}  •  Mã: $staffId',
+                  style: const TextStyle(
+                    color: Color(0xFFDCEBFA),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Khối Thông tin Công việc
+        Card(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Thông tin hồ sơ',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                    ),
+                    IconButton(
+                      tooltip: 'Chỉnh sửa thông tin',
+                      icon: const Icon(Icons.edit_note_rounded,
+                          color: AppColors.blue700),
+                      onPressed: _showEditProfileDialog,
+                    ),
+                  ],
+                ),
+                const Divider(height: 10),
+                _ProfileInfoTile(
+                  icon: Icons.store_rounded,
+                  label: 'Chi nhánh',
+                  value: 'Siêu thị SSM4 - Chi nhánh Hà Nội',
+                ),
+                _ProfileInfoTile(
+                  icon: Icons.badge_outlined,
+                  label: 'Chức danh',
+                  value: widget.roleTitle,
+                ),
+                _ProfileInfoTile(
+                  icon: Icons.phone_android_rounded,
+                  label: 'Số điện thoại',
+                  value: _phone,
+                ),
+                _ProfileInfoTile(
+                  icon: Icons.mail_outline_rounded,
+                  label: 'Email công việc',
+                  value: _email,
+                ),
+                _ProfileInfoTile(
+                  icon: Icons.schedule_rounded,
+                  label: 'Ca làm việc cố định',
+                  value: 'Ca sáng (07:00 - 15:00)',
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Khối Cài đặt & Tùy chọn
+        Card(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.lock_reset_rounded,
+                    color: AppColors.blue700),
+                title: const Text('Đổi mật khẩu',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: _showChangePasswordDialog,
+              ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              SwitchListTile(
+                secondary: const Icon(Icons.notifications_active_outlined,
+                    color: AppColors.blue700),
+                title: const Text('Thông báo ca làm & cảnh báo',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                value: _notifyLowStock,
+                onChanged: (val) => setState(() => _notifyLowStock = val),
+              ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              SwitchListTile(
+                secondary: const Icon(Icons.mark_email_unread_outlined,
+                    color: AppColors.blue700),
+                title: const Text('Nhận email báo cáo ca làm',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                value: _notifyNewOrder,
+                onChanged: (val) => setState(() => _notifyNewOrder = val),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Nút Đăng xuất
+        SizedBox(
+          height: 48,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red[700],
+              side: BorderSide(color: Colors.red.shade300),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: widget.onLogout,
+            icon: const Icon(Icons.logout_rounded, size: 20),
+            label: const Text(
+              'ĐĂNG XUẤT TÀI KHOẢN NHÂN VIÊN',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+}
+
+class _ProfileInfoTile extends StatelessWidget {
+  const _ProfileInfoTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.muted),
+          const SizedBox(width: 10),
+          Text('$label: ',
+              style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
