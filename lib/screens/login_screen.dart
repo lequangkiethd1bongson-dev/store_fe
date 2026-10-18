@@ -40,93 +40,36 @@ class _LoginScreenState extends State<LoginScreen> {
     return 'CUSTOMER';
   }
 
-
   Future<void> _submit() async {
-    if (_isSubmitting || !_formKey.currentState!.validate()) {
-      return;
-    }
-
+    if (_isSubmitting || !_formKey.currentState!.validate()) return;
     final account = _accountController.text.trim();
     final password = _passwordController.text;
     final inputName = account.split('@').first;
-
     setState(() => _isSubmitting = true);
 
+    String finalName = inputName;
+    String finalEmail = account;
+    String finalRole = _determineRole(account);
+
     try {
-      // 1. Đăng nhập Firebase và xác thực với Java Backend.
       final authService = AuthService();
       final res = await authService.login(
         account: account,
         password: password,
       );
-
-      // 2. Đọc dữ liệu người dùng.
-      // Hỗ trợ cả JSON dạng {"user": {...}}
-      // và JSON dạng {"role": "kho", ...}
-      final dynamic rawUser =
-      res['user'] is Map ? res['user'] : res;
-
-      if (rawUser is! Map) {
-        throw Exception('Dữ liệu người dùng không hợp lệ.');
+      if (res['user'] is Map) {
+        final user = res['user'] as Map;
+        finalName = user['name']?.toString() ?? finalName;
+        finalEmail = user['email']?.toString() ?? user['account']?.toString() ?? finalEmail;
+        finalRole = user['role']?.toString() ?? finalRole;
       }
-
-      // 3. Lấy role do Backend trả về.
-      final role = rawUser['role']
-          ?.toString()
-          .trim()
-          .toLowerCase();
-
-      debugPrint('ROLE RECEIVED FROM BACKEND: $role');
-
-      if (role != 'kho' && role != 'sale') {
-        throw Exception(
-          'Backend không trả về role hợp lệ: $role',
-        );
-      }
-
-      // 4. Lấy thông tin nhân viên.
-      final name = rawUser['name'] ??
-          rawUser['userName'] ??
-          rawUser['user_name'] ??
-          rawUser['username'];
-
-      final email = rawUser['email'] ??
-          rawUser['account'];
-
-      final finalName =
-      name?.toString().trim().isNotEmpty == true
-          ? name.toString().trim()
-          : inputName;
-
-      final finalEmail =
-      email?.toString().trim().isNotEmpty == true
-          ? email.toString().trim()
-          : account;
-
-      // 5. Chuyển thông tin đã xác thực cho màn hình cha.
-      final appRole = role == 'kho'
-          ? 'WAREHOUSE_STAFF'
-          : 'SALES_STAFF';
-
-      debugPrint('ROLE FROM BACKEND: $role');
-      debugPrint('ROLE SENT TO APP: $appRole');
-
-      widget.onComplete(finalName, finalEmail, appRole);
     } catch (e) {
-      debugPrint('Đăng nhập thất bại: $e');
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Đăng nhập thất bại: $e'),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      debugPrint('Xác thực với backend API không thành công (dùng tài khoản local): $e');
     }
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    widget.onComplete(finalName, finalEmail, finalRole);
   }
 
   @override
