@@ -1,5 +1,6 @@
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
+import '../data/sample_data.dart';
 import '../models/product.dart';
 
 /// BƯỚC 4 — gọi api sản phẩm và chuyển json thành danh sách [Product].
@@ -22,6 +23,12 @@ class ProductService {
       query: {'category': category, 'keyword': keyword},
     );
     return _parseList(data);
+  }
+
+  /// GET /categories — danh sách nhóm hàng kèm số lượng sản phẩm.
+  Future<List<ProductCategory>> getCategories() async {
+    final data = await _apiClient.get(ApiConstants.categories);
+    return _parseCategories(data);
   }
 
   /// GET /products/{id} — trả một object sản phẩm, 404 nếu không có.
@@ -57,5 +64,35 @@ class ProductService {
       throw const FormatException('Dữ liệu API không phải một sản phẩm');
     }
     return Product.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  /// đổi mảng json danh mục thành danh sách [ProductCategory].
+  List<ProductCategory> _parseCategories(dynamic data) {
+    final dynamic items = data is Map ? data['content'] : data;
+    if (items is! List) return [];
+    return items.map((item) {
+      if (item is Map) {
+        final name = item['name']?.toString() ?? item['category']?.toString() ?? '';
+        final countNum = item['count'] ?? item['productCount'];
+        final count = countNum != null ? '$countNum sản phẩm' : (item['description']?.toString() ?? '');
+        final emoji = item['emoji']?.toString() ?? _emojiForCategory(name);
+        return ProductCategory(emoji: emoji, name: name, count: count);
+      } else {
+        final name = item.toString();
+        return ProductCategory(emoji: _emojiForCategory(name), name: name, count: '');
+      }
+    }).where((cat) => cat.name.isNotEmpty).toList();
+  }
+
+  static String _emojiForCategory(String name) {
+    if (name.contains('Rau') || name.contains('quả')) return '🥬';
+    if (name.contains('Thịt') || name.contains('cá')) return '🥩';
+    if (name.contains('Sữa') || name.contains('trứng')) return '🥛';
+    if (name.contains('Đồ uống') || name.contains('Nước')) return '🧃';
+    if (name.contains('Bánh') || name.contains('kẹo')) return '🍪';
+    if (name.contains('Gia vị')) return '🧂';
+    if (name.contains('dụng')) return '🧹';
+    if (name.contains('mỹ phẩm')) return '🧴';
+    return '🛒';
   }
 }

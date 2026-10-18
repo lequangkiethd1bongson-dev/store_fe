@@ -1,23 +1,31 @@
 import 'package:flutter/foundation.dart';
 
+import '../data/sample_data.dart';
 import '../models/store_models.dart';
+import '../services/order_service.dart';
 import '../services/product_service.dart';
 
-/// quản lý trạng thái giỏ hàng và đơn mua mẫu dùng chung trong ứng dụng.
+/// quản lý trạng thái giỏ hàng và đơn mua dùng chung trong ứng dụng.
 ///
-/// BƯỚC 5 — gọi [ProductService] để lấy sản phẩm từ backend, cập nhật
-/// danh sách [products] cùng trạng thái [isLoading] / [errorMessage].
+/// BƯỚC 5 — gọi [ProductService] và [OrderService] để liên kết với backend,
+/// cập nhật danh sách [products] cùng trạng thái [isLoading] / [errorMessage].
 class StoreController extends ChangeNotifier {
   StoreController({
     required List<Product> products,
+    List<ProductCategory>? categories,
     Map<String, int> initialCart = const {},
     ProductService? productService,
+    OrderService? orderService,
   }) : _products = List<Product>.of(products),
+       _categories = List<ProductCategory>.of(categories ?? sampleCategories),
        _quantities = Map<String, int>.from(initialCart),
-       _productService = productService ?? ProductService();
+       _productService = productService ?? ProductService(),
+       _orderService = orderService ?? OrderService();
 
   final ProductService _productService;
+  final OrderService _orderService;
   List<Product> _products;
+  List<ProductCategory> _categories;
   final Map<String, int> _quantities;
   final List<StoreOrder> _orders = [];
   bool _isLoading = false;
@@ -26,6 +34,8 @@ class StoreController extends ChangeNotifier {
 
   /// danh sách sản phẩm đang hiển thị, lấy từ api hoặc dữ liệu mẫu.
   List<Product> get products => List.unmodifiable(_products);
+  /// danh sách danh mục sản phẩm, lấy từ api hoặc dữ liệu mẫu.
+  List<ProductCategory> get categories => List.unmodifiable(_categories);
   /// cho biết đang chờ backend trả danh sách sản phẩm.
   bool get isLoading => _isLoading;
   /// nội dung lỗi của lần tải gần nhất, null nếu thành công.
@@ -60,7 +70,7 @@ class StoreController extends ChangeNotifier {
   /// tính tổng tiền hàng và phí giao hàng mẫu.
   int get total => subtotal + deliveryFee;
 
-  /// gọi api `GET /products` rồi thay danh sách sản phẩm trên giao diện.
+  /// gọi api `GET /products` và `GET /categories` rồi thay dữ liệu trên giao diện.
   ///
   /// nếu backend chưa chạy hoặc lỗi, giữ nguyên dữ liệu đang có (dữ liệu
   /// mẫu) và lưu lỗi vào [errorMessage] để ứng dụng vẫn dùng được.
@@ -74,8 +84,21 @@ class StoreController extends ChangeNotifier {
         category: category,
         keyword: keyword,
       );
-      _products = List<Product>.of(result);
+      if (result.isNotEmpty) {
+        _products = List<Product>.of(result);
+      }
       _loadedFromApi = true;
+
+      // Nạp thêm danh mục sản phẩm từ backend
+      try {
+        final categoryList = await _productService.getCategories();
+        if (categoryList.isNotEmpty) {
+          _categories = List<ProductCategory>.of(categoryList);
+        }
+      } catch (catErr) {
+        debugPrint('Chưa lấy được danh mục từ API: $catErr');
+      }
+
       // xóa khỏi giỏ các sản phẩm mà backend không còn trả về.
       final ids = _products.map((product) => product.id).toSet();
       _quantities.removeWhere((id, _) => !ids.contains(id));
@@ -88,8 +111,25 @@ class StoreController extends ChangeNotifier {
     }
   }
 
+  /// Nạp danh sách đơn hàng từ backend Java.
+  Future<void> loadOrders() async {
+    try {
+      final remoteOrders = await _orderService.getOrders();
+      if (remoteOrders.isNotEmpty) {
+        _orders.clear();
+        _orders.addAll(remoteOrders);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Chưa lấy được đơn hàng từ API: $e');
+    }
+  }
+
   /// tải lại sản phẩm từ backend khi người dùng kéo để làm mới.
-  Future<void> refreshDemoData() => loadProducts();
+  Future<void> refreshDemoData() async {
+    await loadProducts();
+    await loadOrders();
+  }
 
   /// tìm sản phẩm theo mã định danh hoặc báo lỗi nếu mã không tồn tại.
   Product productById(String id) =>
@@ -128,7 +168,7 @@ class StoreController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// tạo đơn mua mẫu, lưu bản sao các dòng hàng rồi làm trống giỏ.
+  /// tạo đơn mua, gửi lên backend nếu có kết nối, lưu bản sao các dòng hàng rồi làm trống giỏ.
   StoreOrder placeDemoOrder({int deliveryFee = 10000}) {
     if (_quantities.isEmpty) {
       throw StateError('Không thể đặt hàng khi giỏ hàng trống.');
@@ -140,6 +180,13 @@ class StoreController extends ChangeNotifier {
       total: subtotal + deliveryFee,
     );
     _orders.insert(0, order);
+
+    // Gửi đơn mua lên backend không đồng bộ
+    _orderService.createOrder(lines: cartLines, total: order.total).catchError((e) {
+      debugPrint('Tạo đơn hàng online thất bại (chuyển sang chế độ local): $e');
+      return null;
+    });
+
     clearCart();
     notifyListeners();
     return order;

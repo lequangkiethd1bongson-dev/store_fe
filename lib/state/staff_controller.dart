@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/store_models.dart';
+import '../services/staff_service.dart';
 
 /// mô tả một kệ trưng bày cùng nhóm hàng và sức chứa tối đa.
 class StaffShelf {
@@ -54,10 +55,12 @@ class StaffProductLocation {
   final int tier;
 }
 
-/// quản lý tồn kho, số lượng trên kệ và hóa đơn bán hàng mẫu tại máy.
+/// quản lý tồn kho, số lượng trên kệ và hóa đơn bán hàng tại máy nhân viên.
 class StaffController extends ChangeNotifier {
-  StaffController({required this.products})
-    : _warehouseQuantities = {
+  StaffController({required List<Product> products, StaffService? staffService})
+    : _products = List<Product>.of(products),
+      _staffService = staffService ?? StaffService(),
+      _warehouseQuantities = {
         'milk': 24,
         'apple': 18,
         'eggs': 20,
@@ -107,7 +110,8 @@ class StaffController extends ChangeNotifier {
     );
   }
 
-  final List<Product> products;
+  List<Product> _products;
+  final StaffService _staffService;
   final Map<String, int> _warehouseQuantities;
   final Map<String, Map<int, Map<String, int>>> _shelfQuantities;
   final List<StaffStockReceipt> _stockReceipts = [];
@@ -115,6 +119,35 @@ class StaffController extends ChangeNotifier {
   final Map<String, int> _saleCart = {};
   int _invoiceCounter = 1;
   int _intakeCount = 0;
+
+  List<Product> get products => List.unmodifiable(_products);
+
+  /// Cập nhật danh sách sản phẩm khi nạp lại từ backend.
+  void updateProducts(List<Product> newProducts) {
+    if (newProducts.isNotEmpty) {
+      _products = List<Product>.of(newProducts);
+      notifyListeners();
+    }
+  }
+
+  /// Nạp thông tin kệ và tồn kho từ backend Java.
+  Future<void> loadFromApi() async {
+    try {
+      final warehouseData = await _staffService.getWarehouse();
+      if (warehouseData is List) {
+        for (final item in warehouseData) {
+          if (item is Map && item['productId'] != null) {
+            final pId = item['productId'].toString();
+            final qty = (item['quantity'] as num?)?.toInt() ?? 0;
+            _warehouseQuantities[pId] = qty;
+          }
+        }
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Chưa lấy được dữ liệu kho từ API: $e');
+    }
+  }
 
   static const barcodeByProductId = <String, String>{
     'milk': '8938501001001',
@@ -332,6 +365,9 @@ class StaffController extends ChangeNotifier {
       ),
     );
     _intakeCount++;
+    _staffService.receiveStock(productId: product.id, quantity: quantity).catchError((e) {
+      debugPrint('Đồng bộ nhập kho lên API thất bại: $e');
+    });
     notifyListeners();
   }
 
@@ -366,6 +402,14 @@ class StaffController extends ChangeNotifier {
       (current) => current + quantity,
       ifAbsent: () => quantity,
     );
+    _staffService.moveToShelf(
+      shelfCode: shelfCode,
+      tier: tier,
+      productId: product.id,
+      quantity: quantity,
+    ).catchError((e) {
+      debugPrint('Đồng bộ chuyển kệ lên API thất bại: $e');
+    });
     notifyListeners();
   }
 
@@ -457,6 +501,18 @@ class StaffController extends ChangeNotifier {
     );
     _invoiceCounter++;
     _sales.insert(0, sale);
+
+    _staffService.completeSale(
+      lines: lines.map((l) => {
+        'productId': l.product.id,
+        'quantity': l.quantity,
+        'price': l.product.price,
+      }).toList(),
+      total: sale.total,
+    ).catchError((e) {
+      debugPrint('Đồng bộ xuất hóa đơn POS lên API thất bại: $e');
+    });
+
     _saleCart.clear();
     notifyListeners();
     return sale;

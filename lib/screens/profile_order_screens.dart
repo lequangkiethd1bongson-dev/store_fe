@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/sample_data.dart';
 import '../models/store_models.dart';
+import '../services/auth_service.dart';
 import '../state/store_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
@@ -31,6 +32,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
     'Đã hủy',
   ];
   String _selectedTab = 'Tất cả';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.store.loadOrders();
+    });
+  }
 
   /// dựng danh sách đơn phù hợp với tab trạng thái hiện tại.
   @override
@@ -113,10 +122,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  /// ghép các đơn đã mua với một số đơn mẫu để minh họa lịch sử.
+  /// trả danh sách đơn hàng đã lấy từ backend hoặc đơn hàng mua trong phiên,
+  /// kết hợp với một số đơn mẫu nếu danh sách hiện tại đang trống.
   List<StoreOrder> _demoOrders(StoreController store) {
+    if (store.orders.isNotEmpty) {
+      return store.orders;
+    }
     final now = DateTime.now();
-    final examples = <StoreOrder>[
+    return <StoreOrder>[
       StoreOrder(
         id: 'SM24051608',
         createdAt: now,
@@ -150,7 +163,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
         status: 'Chờ xác nhận',
       ),
     ];
-    return [...store.orders, ...examples];
   }
 }
 
@@ -979,18 +991,53 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// kiểm tra biểu mẫu rồi gửi tên và email về màn hình gọi.
+  /// kiểm tra biểu mẫu rồi kết nối API xác thực hoặc gửi dữ liệu về màn hình gọi.
   Future<void> _submit() async {
     if (_isSubmitting || !_formKey.currentState!.validate()) return;
     final account = _accountController.text.trim();
-    final name = _isRegistering
+    final password = _passwordController.text;
+    final inputName = _isRegistering
         ? _nameController.text.trim()
         : account.split('@').first;
     setState(() => _isSubmitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 420));
+
+    String finalName = inputName;
+    String finalEmail = account;
+    String finalRole = _selectedRole;
+
+    try {
+      final authService = AuthService();
+      if (_isRegistering) {
+        final res = await authService.register(
+          name: inputName,
+          account: account,
+          password: password,
+        );
+        if (res['user'] is Map) {
+          final user = res['user'] as Map;
+          finalName = user['name']?.toString() ?? finalName;
+          finalEmail = user['email']?.toString() ?? user['account']?.toString() ?? finalEmail;
+          finalRole = user['role']?.toString() ?? finalRole;
+        }
+      } else {
+        final res = await authService.login(
+          account: account,
+          password: password,
+        );
+        if (res['user'] is Map) {
+          final user = res['user'] as Map;
+          finalName = user['name']?.toString() ?? finalName;
+          finalEmail = user['email']?.toString() ?? user['account']?.toString() ?? finalEmail;
+          finalRole = user['role']?.toString() ?? finalRole;
+        }
+      }
+    } catch (e) {
+      debugPrint('Xác thực với backend API không thành công (dùng tài khoản local): $e');
+    }
+
     if (!mounted) return;
     setState(() => _isSubmitting = false);
-    widget.onComplete(name, account, _selectedRole);
+    widget.onComplete(finalName, finalEmail, finalRole);
   }
 }
 

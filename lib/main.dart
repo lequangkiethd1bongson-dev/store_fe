@@ -51,6 +51,15 @@ class _SmartMartAppState extends State<SmartMartApp> {
       initialCart: const {'milk': 1, 'apple': 2, 'eggs': 1},
     );
     _staffController = StaffController(products: sampleProducts);
+
+    _store.addListener(() {
+      _staffController.updateProducts(_store.products);
+    });
+
+    // Nạp dữ liệu sản phẩm và đơn hàng trực tiếp từ backend khi khởi động app
+    _store.loadProducts();
+    _store.loadOrders();
+    _staffController.loadFromApi();
   }
 
   /// giải phóng tài nguyên của các bộ quản lý khi ứng dụng bị gỡ khỏi cây giao diện.
@@ -279,7 +288,10 @@ class _RootShellState extends State<RootShell> {
         onOpenMenu: _showSideMenu,
         onOpenCart: _openCart,
       ),
-      CategoryScreen(onSelectCategory: (name) => _openProducts(category: name)),
+      CategoryScreen(
+        categories: store.categories,
+        onSelectCategory: (name) => _openProducts(category: name),
+      ),
       CartScreen(store: store, onCheckout: _openCheckout),
       OrdersScreen(store: store, onOpenProduct: _openProduct),
       AccountScreen(

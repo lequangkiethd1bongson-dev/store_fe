@@ -11,13 +11,19 @@ import '../widgets/common_widgets.dart';
 
 /// hiển thị các nhóm sản phẩm và banner quảng bá của danh mục.
 class CategoryScreen extends StatelessWidget {
-  const CategoryScreen({required this.onSelectCategory, super.key});
+  const CategoryScreen({
+    required this.onSelectCategory,
+    this.categories = sampleCategories,
+    super.key,
+  });
 
   final ValueChanged<String> onSelectCategory;
+  final List<ProductCategory> categories;
 
   /// dựng banner toàn chiều ngang và lưới danh mục sản phẩm.
   @override
   Widget build(BuildContext context) {
+    final list = categories.isNotEmpty ? categories : sampleCategories;
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -37,7 +43,7 @@ class CategoryScreen extends StatelessWidget {
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: sampleCategories.length,
+                itemCount: list.length,
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
                   crossAxisSpacing: 12,
@@ -45,7 +51,7 @@ class CategoryScreen extends StatelessWidget {
                   childAspectRatio: 1.12,
                 ),
                 itemBuilder: (context, index) {
-                  final category = sampleCategories[index];
+                  final category = list[index];
                   return InkWell(
                     borderRadius: BorderRadius.circular(18),
                     onTap: () => onSelectCategory(category.name),

@@ -186,6 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onAction: widget.onOpenCategories,
                 ),
                 _QuickCategories(
+                  categories: widget.store.categories,
                   onSelect: (category) => widget.onOpenProducts(category.name),
                 ),
                 SectionHeading(
@@ -806,8 +807,12 @@ class _PromoSlide extends StatelessWidget {
 }
 
 class _QuickCategories extends StatefulWidget {
-  const _QuickCategories({required this.onSelect});
+  const _QuickCategories({
+    required this.categories,
+    required this.onSelect,
+  });
 
+  final List<ProductCategory> categories;
   final ValueChanged<ProductCategory> onSelect;
 
   /// tạo trạng thái cho danh sách danh mục cuộn ngang.
@@ -821,14 +826,15 @@ class _QuickCategoriesState extends State<_QuickCategories> {
   /// dựng các nút danh mục nhanh trên trang chủ.
   @override
   Widget build(BuildContext context) {
+    final categoryList = widget.categories.isNotEmpty ? widget.categories : sampleCategories;
     return SizedBox(
       height: 112,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: sampleCategories.length,
+        itemCount: categoryList.length,
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
-          final category = sampleCategories[index];
+          final category = categoryList[index];
           final isSelected = _selectedIndex == index;
           return Semantics(
             button: true,
