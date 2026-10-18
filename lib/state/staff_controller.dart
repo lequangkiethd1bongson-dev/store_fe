@@ -349,9 +349,20 @@ class StaffController extends ChangeNotifier {
     return (occupied * 100 / shelf.capacity).round().clamp(0, 100);
   }
 
+  /// Thêm sản phẩm mới vào danh sách sản phẩm nếu chưa có.
+  void addProduct(Product product) {
+    if (!_products.any((p) => p.id == product.id)) {
+      _products.insert(0, product);
+      notifyListeners();
+    }
+  }
+
   /// ghi nhận hàng mới vào kho và tăng số lượt nhập.
   void receiveStock(Product product, int quantity) {
     _requirePositiveQuantity(quantity);
+    if (!_products.any((p) => p.id == product.id)) {
+      _products.insert(0, product);
+    }
     _warehouseQuantities.update(
       product.id,
       (current) => current + quantity,
