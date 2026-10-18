@@ -6,6 +6,7 @@ import '../state/staff_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'kho_addproduct.dart';
+import 'kho_editproduct.dart';
 
 /// cung cấp không gian làm việc riêng cho các thao tác của nhân viên.
 class StaffWorkspace extends StatefulWidget {
@@ -1558,6 +1559,27 @@ Future<void> _showInventoryProductDetails(
                   subtitle: Text('Nhập ${receipt.quantity} sản phẩm'),
                 ),
               ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.blue700,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await Navigator.of(context).push<Product>(
+                  MaterialPageRoute<Product>(
+                    builder: (_) => KhoEditProductScreen(
+                      product: product,
+                      controller: controller,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.edit_rounded, color: Colors.white),
+              label: const Text('Sửa thông tin sản phẩm', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
           ],
         ),
       ),
