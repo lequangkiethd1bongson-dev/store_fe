@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../services/product_service.dart';
 import '../state/staff_controller.dart';
 import '../theme/app_theme.dart';
 
@@ -79,7 +80,7 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
 
   void _generateRandomBarcode() {
     final random = Random();
-    final code = ' ';
+    final code = '893${List.generate(10, (_) => random.nextInt(10)).join()}';
     setState(() {
       _barcodeController.text = code;
     });
@@ -90,73 +91,87 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
 
     setState(() => _isSubmitting = true);
 
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+    try {
+      final name = _nameController.text.trim();
+      final barcode = _barcodeController.text.trim();
+      final brand = _brandController.text.trim();
+      final packageSize = _packageSizeController.text.trim();
+      final description = _descriptionController.text.trim();
+      final imageUrl = _imageUrlController.text.trim().isEmpty
+          ? 'assets/images/logosieuthi.png'
+          : _imageUrlController.text.trim();
 
-    final name = _nameController.text.trim();
-    final barcode = _barcodeController.text.trim();
-    final brand = _brandController.text.trim();
-    final packageSize = _packageSizeController.text.trim();
-    final description = _descriptionController.text.trim();
-    final imageUrl = _imageUrlController.text.trim().isEmpty
-        ? 'assets/images/logosieuthi.png'
-        : _imageUrlController.text.trim();
+      final sellingPrice = int.tryParse(_sellingPriceController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+      final importPrice = int.tryParse(_importPriceController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+      final initialQuantity = int.tryParse(_initialQuantityController.text.trim()) ?? 50;
 
-    final sellingPrice = int.tryParse(_sellingPriceController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    final importPrice = int.tryParse(_importPriceController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    final initialQuantity = int.tryParse(_initialQuantityController.text.trim()) ?? 50;
+      final productId = 'prod_${DateTime.now().millisecondsSinceEpoch}';
 
-    final productId = 'prod_${DateTime.now().millisecondsSinceEpoch}';
+      final newProduct = Product(
+        id: productId,
+        name: name,
+        price: sellingPrice,
+        importPrice: importPrice,
+        oldPrice: sellingPrice > 0 ? (sellingPrice * 1.15).round() : null,
+        rating: 5.0,
+        category: _selectedCategory,
+        imageUrl: imageUrl,
+        barcode: barcode,
+        brand: brand.isEmpty ? 'SSM4 Supermarket' : brand,
+        packageSize: packageSize.isEmpty ? 'Gói / Hộp' : packageSize,
+        description: description.isEmpty ? 'Sản phẩm mới nhập kho siêu thị SSM4.' : description,
+        stock: initialQuantity,
+      );
 
-    final newProduct = Product(
-      id: productId,
-      name: name,
-      price: sellingPrice,
-      importPrice: importPrice,
-      oldPrice: sellingPrice > 0 ? (sellingPrice * 1.15).round() : null,
-      rating: 5.0,
-      category: _selectedCategory,
-      imageUrl: imageUrl,
-      barcode: barcode,
-      brand: brand.isEmpty ? 'SSM4 Supermarket' : brand,
-      packageSize: packageSize.isEmpty ? 'Gói / Hộp' : packageSize,
-      description: description.isEmpty ? 'Sản phẩm mới nhập kho siêu thị SSM4.' : description,
-      stock: initialQuantity,
-    );
-
-    final controller = widget.controller;
-    if (controller != null) {
-      if (!controller.products.any((p) => p.id == newProduct.id)) {
-        controller.products.add(newProduct);
+      // Gửi API tạo sản phẩm lên backend Java nếu kết nối được
+      try {
+        await ProductService().createProduct(newProduct);
+      } catch (e) {
+        debugPrint('Tạo sản phẩm trên API chưa thành công (lưu tạm vào ứng dụng): $e');
       }
-      controller.receiveStock(newProduct, initialQuantity);
-    }
 
-    if (widget.onProductAdded != null) {
-      widget.onProductAdded!(newProduct);
-    }
+      final controller = widget.controller;
+      if (controller != null) {
+        controller.addProduct(newProduct);
+        controller.receiveStock(newProduct, initialQuantity);
+      }
 
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
+      if (widget.onProductAdded != null) {
+        widget.onProductAdded!(newProduct);
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: Colors.white),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Đã nhập kho sản phẩm mới: "$name" ($initialQuantity sản phẩm)',
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Đã nhập kho sản phẩm mới: "$name" ($initialQuantity sản phẩm)',
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+          backgroundColor: Colors.green[700],
+          duration: const Duration(seconds: 3),
         ),
-        backgroundColor: Colors.green[700],
-        duration: const Duration(seconds: 3),
-      ),
-    );
+      );
 
-    Navigator.of(context).pop(newProduct);
+      Navigator.of(context).pop(newProduct);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi nhập kho: $e'),
+          backgroundColor: Colors.red[700],
+        ),
+      );
+    }
   }
 
   @override

@@ -43,6 +43,18 @@ class ProductService {
     return _parseOne(data);
   }
 
+  /// POST /products — tạo hoặc thêm sản phẩm mới vào backend.
+  Future<Product> createProduct(Product product) async {
+    final data = await _apiClient.post(
+      ApiConstants.products,
+      body: product.toJson(),
+    );
+    if (data is Map) {
+      return Product.fromJson(Map<String, dynamic>.from(data));
+    }
+    return product;
+  }
+
   /// đổi body json thành danh sách, chấp nhận cả mảng trần hoặc trang
   /// phân trang của spring (`{"content": [...]}`).
   List<Product> _parseList(dynamic data) {

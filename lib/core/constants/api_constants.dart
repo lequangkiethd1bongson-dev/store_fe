@@ -12,14 +12,22 @@
 /// - api cần đăng nhập đọc header `Authorization: Bearer <token>`.
 ///
 /// xem chi tiết hợp đồng api trong tệp `docs/BACKEND_API_GUIDE.md`.
+import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 class ApiConstants {
   ApiConstants._();
 
-  /// `10.0.2.2` là địa chỉ máy tính khi chạy trên máy ảo android.
-  /// chạy trên điện thoại thật thì đổi thành ip lan của máy chạy backend,
-  /// ví dụ `http://192.168.1.10:8080/api`.
-  ///static const String baseUrl = 'http://10.0.2.2:8080/api';
-  static const String baseUrl = 'http://192.168.1.25:8080/api';
+  /// `10.0.2.2` khi chạy trên máy ảo Android, `localhost` khi chạy Web/Desktop/iOS Simulator.
+  static String get baseUrl {
+    if (kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux) {
+      return 'http://localhost:8080/api';
+    }
+    return 'http://192.168.1.7:8080/api';
+  }
 
   /// thời gian chờ tối đa cho một yêu cầu http.
   static const Duration timeout = Duration(seconds: 15);
@@ -46,10 +54,10 @@ class ApiConstants {
   // ---------------------------------------------------------------------------
 
   /// POST /auth/login     body: {account, password}
-  static const String login = '/auth/login';
+  static const String login = '/users/login';
 
   /// POST /auth/register  body: {name, account, password}
-  static const String register = '/auth/register';
+  static const String register = '/users/register';
 
   /// GET  /users/me  → thông tin người đang đăng nhập.
   static const String me = '/users/me';

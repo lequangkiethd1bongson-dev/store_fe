@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "940212666167",
+    "project_id": "demostore-dce10",
+    "storage_bucket": "demostore-dce10.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:940212666167:android:cdde35127be254da4664b2",
+        "android_client_info": {
+          "package_name": "com.example.smartmart_frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC4hhfimMHiVl2d7t1PqriM2Q48CHY8pwI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
