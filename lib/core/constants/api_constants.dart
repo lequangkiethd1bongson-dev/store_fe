@@ -1,28 +1,21 @@
-/// BƯỚC 1 — khai báo địa chỉ backend java và toàn bộ đường dẫn api.
-///
-/// quy ước chung để backend (spring boot) làm theo:
-/// - tiền tố mọi api: `/api`, cổng mặc định `8080`.
-/// - dữ liệu gửi và nhận đều là json, header `Content-Type: application/json`.
-/// - tên trường json viết kiểu camelCase (mặc định của jackson), ví dụ
-///   `oldPrice`, `imageUrl`, `createdAt`.
-/// - tiền là số nguyên vnđ (36500), không gửi chuỗi "36.500đ".
-/// - thời gian theo iso-8601, ví dụ `2026-10-16T18:09:14`.
-/// - api trả danh sách thì body là mảng json `[...]`, không bọc thêm lớp.
-/// - lỗi trả mã http 4xx/5xx kèm body `{"message": "nội dung lỗi"}`.
-/// - api cần đăng nhập đọc header `Authorization: Bearer <token>`.
-///
-/// xem chi tiết hợp đồng api trong tệp `docs/BACKEND_API_GUIDE.md`.
+
 class ApiConstants {
   ApiConstants._();
 
-  /// `10.0.2.2` là địa chỉ máy tính khi chạy trên máy ảo android.
-  /// chạy trên điện thoại thật thì đổi thành ip lan của máy chạy backend,
-  /// ví dụ `http://192.168.1.10:8080/api`.
-  ///static const String baseUrl = 'http://10.0.2.2:8080/api';
-  static const String baseUrl = 'http://192.168.1.25:8080/api';
+  /// Địa chỉ Backend API:
+  /// 1. Nếu chạy trên ĐIỆN THOẠI THẬT (Cắm cáp USB):
+  ///    mở Terminal trên máy tính gõ lệnh: `adb reverse tcp:8080 tcp:8080`
+  ///    rồi dùng: 'http://127.0.0.1:8080/api'
+  /// 2. Nếu chạy trên ĐIỆN THOẠI THẬT (Cùng Wi-Fi):
+  ///    đổi thành IP LAN máy tính của bạn (VD: 'http://192.168.1.7:8080/api')
+  /// 3. Nếu chạy trên MÁY ẢO Android (Emulator):
+  ///    dùng: 'http://10.0.2.2:8080/api'
+  static const String baseUrl = 'http://10.100.3.212:8080/api';
+  // static const String baseUrl = 'http://10.0.2.2:8080/api';
+  // static const String baseUrl = 'http://127.0.0.1:8080/api';
 
   /// thời gian chờ tối đa cho một yêu cầu http.
-  static const Duration timeout = Duration(seconds: 15);
+  static const Duration timeout = Duration(seconds: 20);
 
   // ---------------------------------------------------------------------------
   // SẢN PHẨM & DANH MỤC (khách hàng) — đã nối vào giao diện.
@@ -46,10 +39,10 @@ class ApiConstants {
   // ---------------------------------------------------------------------------
 
   /// POST /auth/login     body: {account, password}
-  static const String login = '/auth/login';
+  static const String login = '/users/login';
 
   /// POST /auth/register  body: {name, account, password}
-  static const String register = '/auth/register';
+  static const String register = '/users/register';
 
   /// GET  /users/me  → thông tin người đang đăng nhập.
   static const String me = '/users/me';

@@ -21,7 +21,10 @@ enum UserRole {
     if (clean.contains('WAREHOUSE') || clean.contains('KHO')) {
       return UserRole.warehouseStaff;
     }
-    if (clean.contains('SALES') || clean.contains('BAN_HANG') || clean.contains('BANHANG')) {
+    if (clean == 'SALE' ||
+        clean.contains('SALES') ||
+        clean.contains('BAN_HANG') ||
+        clean.contains('BANHANG')) {
       return UserRole.salesStaff;
     }
     if (clean.contains('STAFF') || clean.contains('NHAN_VIEN')) {

@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
 import 'data/sample_data.dart';
 import 'models/store_models.dart';
 import 'screens/cart_checkout_screens.dart';
@@ -17,7 +20,15 @@ import 'state/store_controller.dart';
 import 'theme/app_theme.dart';
 
 /// khởi chạy ứng dụng ssm4.
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('Firebase initialization error: $e');
+  }
   runApp(const SmartMartApp());
 }
 

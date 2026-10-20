@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/store_models.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import 'register_screen.dart';
@@ -57,14 +58,38 @@ class _LoginScreenState extends State<LoginScreen> {
         account: account,
         password: password,
       );
-      if (res['user'] is Map) {
-        final user = res['user'] as Map;
-        finalName = user['name']?.toString() ?? finalName;
-        finalEmail = user['email']?.toString() ?? user['account']?.toString() ?? finalEmail;
-        finalRole = user['role']?.toString() ?? finalRole;
+      final user = res['user'] is Map
+          ? Map<String, dynamic>.from(res['user'] as Map)
+          : res;
+      if (user.isNotEmpty) {
+        finalName = user['name']?.toString() ??
+            user['user_name']?.toString() ??
+            finalName;
+        finalEmail = user['email']?.toString() ??
+            user['account']?.toString() ??
+            finalEmail;
+        final backendRole = user['role']?.toString();
+        if (backendRole != null) {
+          finalRole = switch (UserRole.fromString(backendRole)) {
+            UserRole.warehouseStaff => 'WAREHOUSE_STAFF',
+            UserRole.salesStaff => 'SALES_STAFF',
+            UserRole.staff => 'STAFF',
+            UserRole.customer => 'CUSTOMER',
+          };
+        }
       }
     } catch (e) {
-      debugPrint('Xác thực với backend API không thành công (dùng tài khoản local): $e');
+      final errorMsg = e.toString().replaceAll('ApiException: ', '');
+      debugPrint('Xác thực với backend API không thành công: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không kết nối được Backend ($errorMsg). Đang dùng tài khoản Local.'),
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
 
     if (!mounted) return;

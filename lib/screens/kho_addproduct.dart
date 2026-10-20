@@ -79,7 +79,7 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
 
   void _generateRandomBarcode() {
     final random = Random();
-    final code = ' ';
+    final code = '8938${100000000 + random.nextInt(899999999)}';
     setState(() {
       _barcodeController.text = code;
     });
@@ -125,9 +125,7 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
 
     final controller = widget.controller;
     if (controller != null) {
-      if (!controller.products.any((p) => p.id == newProduct.id)) {
-        controller.products.add(newProduct);
-      }
+      controller.addProduct(newProduct);
       controller.receiveStock(newProduct, initialQuantity);
     }
 

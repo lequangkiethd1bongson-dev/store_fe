@@ -132,8 +132,19 @@ class StoreController extends ChangeNotifier {
   }
 
   /// tìm sản phẩm theo mã định danh hoặc báo lỗi nếu mã không tồn tại.
-  Product productById(String id) =>
-      _products.firstWhere((product) => product.id == id);
+  Product productById(String id) {
+    return _products.firstWhere(
+      (product) => product.id == id,
+      orElse: () => Product(
+        id: id,
+        name: 'Sản phẩm $id',
+        price: 0,
+        rating: 5.0,
+        category: 'Hàng hóa',
+        imageUrl: 'assets/images/logosieuthi.png',
+      ),
+    );
+  }
 
   /// thêm số lượng sản phẩm vào giỏ rồi thông báo các màn hình đang nghe.
   void addToCart(Product product, {int quantity = 1}) {

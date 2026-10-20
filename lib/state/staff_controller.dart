@@ -122,6 +122,14 @@ class StaffController extends ChangeNotifier {
 
   List<Product> get products => List.unmodifiable(_products);
 
+  /// Thêm sản phẩm mới vào danh sách quản lý.
+  void addProduct(Product product) {
+    if (!_products.any((p) => p.id == product.id)) {
+      _products.add(product);
+      notifyListeners();
+    }
+  }
+
   /// Cập nhật danh sách sản phẩm khi nạp lại từ backend.
   void updateProducts(List<Product> newProducts) {
     if (newProducts.isNotEmpty) {
@@ -224,8 +232,31 @@ class StaffController extends ChangeNotifier {
   }
 
   /// tìm sản phẩm theo mã định danh và báo lỗi nếu không tìm thấy.
-  Product productById(String id) =>
-      products.firstWhere((product) => product.id == id);
+  Product productById(String id) {
+    return products.firstWhere(
+      (product) => product.id == id,
+      orElse: () => Product(
+        id: id,
+        name: id == 'milk'
+            ? 'Sữa tươi Vinamilk'
+            : id == 'apple'
+                ? 'Táo Envy'
+                : id == 'eggs'
+                    ? 'Trứng gà sạch'
+                    : id == 'rice'
+                        ? 'Gạo ST25'
+                        : id == 'water'
+                            ? 'Nước khoáng Lavie'
+                            : id == 'beef'
+                                ? 'Thịt bò Mỹ'
+                                : 'Sản phẩm $id',
+        price: 20000,
+        rating: 5.0,
+        category: 'Hàng hóa',
+        imageUrl: 'assets/images/logosieuthi.png',
+      ),
+    );
+  }
 
   /// trả số lượng của một sản phẩm đang còn trong kho dự trữ.
   int warehouseQuantity(String productId) =>

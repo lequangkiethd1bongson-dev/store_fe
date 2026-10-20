@@ -69,7 +69,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
         finalRole = user['role']?.toString() ?? finalRole;
       }
     } catch (e) {
-      debugPrint('Đăng ký qua backend API không thành công (dùng tài khoản local): $e');
+      final errorMsg = e.toString().replaceAll('ApiException: ', '');
+      debugPrint('Đăng ký qua backend API không thành công: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi đăng ký kết nối Backend ($errorMsg). Đang dùng tài khoản Local.'),
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
 
     if (!mounted) return;
