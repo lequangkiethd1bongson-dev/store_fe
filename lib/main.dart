@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'core/network/api_client.dart';
+import 'services/auth_service.dart';
 
 import 'data/sample_data.dart';
 import 'models/store_models.dart';
@@ -19,16 +20,32 @@ import 'state/staff_controller.dart';
 import 'state/store_controller.dart';
 import 'theme/app_theme.dart';
 
-/// khởi chạy ứng dụng ssm4.
+/// Khởi chạy ứng dụng SSM4 và khởi tạo Supabase Auth.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    debugPrint('Firebase initialization error: $e');
-  }
+
+  const supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://aaelclxxsknskpeqasfj.supabase.co',
+  );
+  const publishableKey = String.fromEnvironment(
+    'SUPABASE_PUBLISHABLE_KEY',
+    defaultValue: 'sb_publishable_fGGwRPSnIamIZrUqSLtHuQ_eLJ8sonf',
+  );
+
+  await Supabase.initialize(
+    url: supabaseUrl,
+    publishableKey: publishableKey,
+  );
+
+  final auth = Supabase.instance.client.auth;
+  ApiClient.authToken = auth.currentSession?.accessToken;
+
+  // Luôn đồng bộ access token với phiên Supabase hiện tại, kể cả khi token được làm mới.
+  auth.onAuthStateChange.listen((state) {
+    ApiClient.authToken = state.session?.accessToken;
+  });
+
   runApp(const SmartMartApp());
 }
 
@@ -52,9 +69,7 @@ class _SmartMartAppState extends State<SmartMartApp> {
   String _userEmail = '';
   String _userRole = 'CUSTOMER';
 
-  /// BƯỚC 7 — khởi tạo các bộ quản lý dữ liệu dùng chung giữa các màn hình.
-  /// Dự án hiện quản lý trạng thái bằng ChangeNotifier + AnimatedBuilder.
-  /// Nếu sau này chuyển sang Provider / Riverpod / Bloc thì đăng ký tại đây.
+
   @override
   void initState() {
     super.initState();
@@ -101,17 +116,26 @@ class _SmartMartAppState extends State<SmartMartApp> {
           if (mounted) setState(() => _showLoginWelcome = false);
         },
       );
-    } else if (_userRole == 'SALES_STAFF') {
-      homeWidget = SalesStaffWorkspace(
+    } else if (_userRole == 'STORE_MANAGER' || _userRole == 'SALES_STAFF') {
+      homeWidget = StoreStaffWorkspace(
         controller: _staffController,
         staffName: _userName,
+        userRole: _userRole,
         onExit: () => _updateSession(null, null),
       );
-    } else if (_userRole == 'WAREHOUSE_STAFF') {
+    } else if (_userRole == 'WAREHOUSE_STAFF' || _userRole == 'WAREHOUSE_MANAGER') {
       homeWidget = WarehouseStaffWorkspace(
         controller: _staffController,
         staffName: _userName,
         onExit: () => _updateSession(null, null),
+      );
+    } else if (_userRole == 'ADMIN') {
+      // Không điều hướng Admin vào giao diện khách hàng.
+      // Thay màn hình thông báo này bằng widget quản trị thực tế khi đã có.
+      homeWidget = _AdminRouteGuardScreen(
+        userName: _userName,
+        userEmail: _userEmail,
+        onLogout: () => _updateSession(null, null),
       );
     } else {
       homeWidget = RootShell(
@@ -136,47 +160,254 @@ class _SmartMartAppState extends State<SmartMartApp> {
     );
   }
 
-  /// đọc thông tin phiên đã lưu sau khi hiệu ứng mở ứng dụng kết thúc.
+  /// Khôi phục phiên từ Supabase; SharedPreferences chỉ lưu thông tin hiển thị,
+  /// không được dùng làm bằng chứng xác thực.
   Future<void> _finishStartup() async {
-    final preferences = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _isLoggedIn = preferences.getBool('session.loggedIn') ?? false;
-      _userName = preferences.getString('session.userName') ?? '';
-      _userEmail = preferences.getString('session.userEmail') ?? '';
-      _userRole = preferences.getString('session.userRole') ?? 'CUSTOMER';
-      _showStartupAnimation = false;
-    });
-  }
-
-  /// chuyển sang trạng thái chào mừng rồi lưu phiên đăng nhập ban đầu.
-  Future<void> _completeInitialLogin(String name, String email, String role) async {
-    if (mounted) setState(() => _showLoginWelcome = true);
-    await _updateSession(name, email, role);
-  }
-
-  /// lưu hoặc xóa phiên đăng nhập mẫu trong bộ nhớ thiết bị.
-  Future<void> _updateSession(String? name, String? email, [String? role]) async {
-    final preferences = await SharedPreferences.getInstance();
-    if (name == null || email == null) {
-      await preferences.remove('session.loggedIn');
-      await preferences.remove('session.userName');
-      await preferences.remove('session.userEmail');
-      await preferences.remove('session.userRole');
-    } else {
-      await preferences.setBool('session.loggedIn', true);
-      await preferences.setString('session.userName', name);
-      await preferences.setString('session.userEmail', email);
-      await preferences.setString('session.userRole', role ?? 'CUSTOMER');
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session == null) {
+        await _clearSavedSession(signOut: false);
+      } else {
+        ApiClient.authToken = session.accessToken;
+        final profile = await _fetchVerifiedProfile();
+        await _saveVerifiedProfile(profile);
+      }
+    } catch (error) {
+      debugPrint('Khôi phục phiên Supabase thất bại: $error');
+      await _clearSavedSession(signOut: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _showStartupAnimation = false;
+        });
+      }
     }
+  }
+
+  /// Chỉ lấy tên/email/role từ hồ sơ Java sau khi access token Supabase được xác minh.
+  Future<Map<String, String>> _fetchVerifiedProfile() async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null || session.accessToken.isEmpty) {
+      throw const FormatException('Không có phiên Supabase đang đăng nhập.');
+    }
+
+    ApiClient.authToken = session.accessToken;
+    final authService = AuthService();
+    try {
+      final profile = await authService.getMe();
+      final name = (profile['name'] ?? profile['fullName'] ?? '').toString().trim();
+      final email = (profile['email'] ?? '').toString().trim();
+      final role = (profile['role'] ?? '').toString().trim().toUpperCase();
+
+      const allowedRoles = <String>{
+        'STORE_MANAGER',
+        'SALES_STAFF',
+        'WAREHOUSE_STAFF',
+        'WAREHOUSE_MANAGER',
+        'ADMIN',
+      };
+
+      if (name.isEmpty || email.isEmpty || role.isEmpty) {
+        throw const FormatException('Hồ sơ nhân viên chưa đầy đủ.');
+      }
+      if (!allowedRoles.contains(role)) {
+        throw const FormatException(
+          'Tài khoản chưa được Admin cấp vai trò hợp lệ.',
+        );
+      }
+
+      return <String, String>{
+        'name': name,
+        'email': email,
+        'role': role,
+      };
+    } finally {
+      authService.dispose();
+    }
+  }
+
+  /// Lưu profile đã được Java xác nhận. Không lưu mật khẩu hoặc token vào SharedPreferences.
+  Future<void> _saveVerifiedProfile(Map<String, String> profile) async {
+    final preferences = await SharedPreferences.getInstance();
+    final name = profile['name']!;
+    final email = profile['email']!;
+    final role = profile['role']!;
+
+    await preferences.setBool('session.loggedIn', true);
+    await preferences.setString('session.userName', name);
+    await preferences.setString('session.userEmail', email);
+    await preferences.setString('session.userRole', role);
+
     if (!mounted) return;
     setState(() {
-      _isLoggedIn = name != null && email != null;
-      _userName = name ?? '';
-      _userEmail = email ?? '';
-      _userRole = role ?? 'CUSTOMER';
-      if (!_isLoggedIn) _showLoginWelcome = false;
+      _isLoggedIn = true;
+      _userName = name;
+      _userEmail = email;
+      _userRole = role;
     });
+  }
+
+  /// Khi màn hình đăng nhập đầu tiên gọi callback, xác minh profile lần nữa ở lớp gốc.
+  /// Điều này chặn callback cũ/local đi tiếp nếu không có session thật.
+  Future<void> _completeInitialLogin(
+      String name,
+      String email,
+      String role,
+      ) async {
+    if (Supabase.instance.client.auth.currentSession == null) {
+      ApiClient.authToken = null;
+      debugPrint('Bỏ qua callback đăng nhập vì không có Supabase session.');
+      return;
+    }
+
+    try {
+      final profile = await _fetchVerifiedProfile();
+      await _saveVerifiedProfile(profile);
+      if (mounted) {
+        setState(() => _showLoginWelcome = true);
+      }
+    } catch (error) {
+      debugPrint('Không xác minh được hồ sơ sau đăng nhập: $error');
+      await _clearSavedSession(signOut: true);
+    }
+  }
+
+  /// Cập nhật phiên từ callback chung. Role truyền từ UI không được tin cậy;
+  /// dữ liệu thật luôn được đọc lại từ Java/employee profile.
+  Future<void> _updateSession(
+      String? name,
+      String? email, [
+        String? role,
+      ]) async {
+    if (name == null || email == null) {
+      await _clearSavedSession(signOut: true);
+      return;
+    }
+
+    if (Supabase.instance.client.auth.currentSession == null) {
+      ApiClient.authToken = null;
+      debugPrint('Từ chối tạo phiên UI vì Supabase session không tồn tại.');
+      return;
+    }
+
+    try {
+      final profile = await _fetchVerifiedProfile();
+      await _saveVerifiedProfile(profile);
+    } catch (error) {
+      debugPrint('Không thể cập nhật phiên đăng nhập: $error');
+      await _clearSavedSession(signOut: true);
+    }
+  }
+
+  /// Xóa cache UI và token; signOut=true sẽ kết thúc phiên Supabase.
+  Future<void> _clearSavedSession({required bool signOut}) async {
+    ApiClient.authToken = null;
+    if (signOut) {
+      try {
+        await Supabase.instance.client.auth.signOut();
+      } catch (error) {
+        debugPrint('Không thể signOut từ Supabase: $error');
+      }
+    }
+
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove('session.loggedIn');
+    await preferences.remove('session.userName');
+    await preferences.remove('session.userEmail');
+    await preferences.remove('session.userRole');
+
+    if (!mounted) return;
+    setState(() {
+      _isLoggedIn = false;
+      _userName = '';
+      _userEmail = '';
+      _userRole = 'CUSTOMER';
+      _showLoginWelcome = false;
+    });
+  }
+
+}
+
+/// Guard tạm cho role ADMIN: không để tài khoản quản trị rơi vào giao diện khách hàng.
+/// Thay bằng màn hình quản trị/cấp quyền thực tế khi widget Admin đã có trong dự án.
+class _AdminRouteGuardScreen extends StatelessWidget {
+  const _AdminRouteGuardScreen({
+    required this.userName,
+    required this.userEmail,
+    required this.onLogout,
+  });
+
+  final String userName;
+  final String userEmail;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        title: const Text('Quản trị viên SSM4'),
+        actions: [
+          IconButton(
+            tooltip: 'Đăng xuất',
+            onPressed: onLogout,
+            icon: const Icon(Icons.logout_rounded),
+          ),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.admin_panel_settings_outlined,
+                      size: 56,
+                      color: AppColors.blue700,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Xin chào, $userName',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      userEmail,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Đăng nhập Admin đã được xác minh. Tuy nhiên, main.dart '
+                          'chưa được nối với màn hình quản trị/cấp quyền thực tế. '
+                          'Tài khoản Admin được giữ ở màn hình này thay vì bị '
+                          'đưa vào giao diện khách hàng.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    OutlinedButton.icon(
+                      onPressed: onLogout,
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Đăng xuất'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -283,7 +514,7 @@ class _RootShellState extends State<RootShell> {
           },
         ),
       ),
-      (route) => route.isFirst,
+          (route) => route.isFirst,
     );
   }
 
@@ -387,15 +618,15 @@ class _RootShellState extends State<RootShell> {
               opacity: animation,
               child: SlideTransition(
                 position:
-                    Tween<Offset>(
-                      begin: const Offset(0, 0.035),
-                      end: Offset.zero,
-                    ).animate(
-                      CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
-                      ),
-                    ),
+                Tween<Offset>(
+                  begin: const Offset(0, 0.035),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
                 child: child,
               ),
             ),
@@ -491,15 +722,15 @@ class _RootShellState extends State<RootShell> {
       transitionBuilder: (context, animation, secondaryAnimation, child) =>
           SlideTransition(
             position:
-                Tween<Offset>(
-                  begin: const Offset(-1, 0),
-                  end: Offset.zero,
-                ).animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                ),
+            Tween<Offset>(
+              begin: const Offset(-1, 0),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+            ),
             child: child,
           ),
     );
@@ -518,10 +749,10 @@ class _FixedScrollBehavior extends MaterialScrollBehavior {
   /// bỏ hiệu ứng trang trí ở mép khi danh sách cuộn quá giới hạn.
   @override
   Widget buildOverscrollIndicator(
-    BuildContext context,
-    Widget child,
-    ScrollableDetails details,
-  ) => child;
+      BuildContext context,
+      Widget child,
+      ScrollableDetails details,
+      ) => child;
 }
 
 class _CartNavIcon extends StatelessWidget {
@@ -576,10 +807,10 @@ class _GlassBottomNavigation extends StatelessWidget {
     (Icons.home_outlined, Icons.home_rounded, 'Trang chủ', 0),
     (Icons.grid_view_rounded, Icons.grid_view_rounded, 'Danh mục', 1),
     (
-      Icons.qr_code_scanner_rounded,
-      Icons.qr_code_scanner_rounded,
-      'Quét mã QR',
-      null,
+    Icons.qr_code_scanner_rounded,
+    Icons.qr_code_scanner_rounded,
+    'Quét mã QR',
+    null,
     ),
     (Icons.shopping_cart_outlined, Icons.shopping_cart_rounded, 'Giỏ hàng', 2),
     (Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Đơn hàng', 3),
@@ -642,35 +873,35 @@ class _GlassBottomNavigation extends StatelessWidget {
                               child: Center(
                                 child: item.$4 == null
                                     ? Container(
-                                        width: 34,
-                                        height: 34,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.blue700,
-                                          shape: BoxShape.circle,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: AppColors.blue900
-                                                  .withValues(alpha: 0.24),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
-                                        ),
-                                        child: const Icon(
-                                          Icons.qr_code_scanner_rounded,
-                                          size: 19,
-                                          color: Colors.white,
-                                        ),
-                                      )
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.blue700,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.blue900
+                                            .withValues(alpha: 0.24),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.qr_code_scanner_rounded,
+                                    size: 19,
+                                    color: Colors.white,
+                                  ),
+                                )
                                     : item.$4 == 2
                                     ? _CartNavIcon(count: cartCount)
                                     : Icon(
-                                        icon,
-                                        size: 23,
-                                        color: selected
-                                            ? AppColors.blue700
-                                            : AppColors.blue800,
-                                      ),
+                                  icon,
+                                  size: 23,
+                                  color: selected
+                                      ? AppColors.blue700
+                                      : AppColors.blue800,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 2),

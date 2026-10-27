@@ -1,6 +1,6 @@
 import '../core/constants/api_constants.dart';
+import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
-import '../models/product.dart';
 import '../models/store_models.dart';
 
 /// Dịch vụ gửi và lấy đơn hàng từ backend Java.
@@ -47,14 +47,14 @@ class OrderService {
   }
 
   /// PATCH /orders/{id}/cancel — hủy đơn hàng khi đang chờ xác nhận.
-  Future<bool> cancelOrder(String orderId) async {
-    try {
-      await _apiClient.patch(ApiConstants.cancelOrder(orderId));
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
+  // Future<bool> cancelOrder(String orderId) async {
+  //   try {
+  //     await _apiClient.patch(ApiConstants.cancelOrder(orderId));
+  //     return true;
+  //   } catch (_) {
+  //     return false;
+  //   }
+  // }
 
   StoreOrder? _parseOrder(Map<String, dynamic> json) {
     try {

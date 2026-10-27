@@ -124,16 +124,43 @@ class StaffController extends ChangeNotifier {
 
   /// Thêm sản phẩm mới vào danh sách quản lý.
   void addProduct(Product product) {
-    if (!_products.any((p) => p.id == product.id)) {
+    final index = _products.indexWhere((p) => p.id == product.id);
+    if (index >= 0) {
+      _products[index] = product;
+    } else {
       _products.add(product);
-      notifyListeners();
     }
+    _warehouseQuantities[product.id] = product.stock;
+    if (product.stock > 0) {
+      _stockReceipts.add(
+        StaffStockReceipt(
+          productId: product.id,
+          receivedAt: DateTime.now(),
+          quantity: product.stock,
+        ),
+      );
+      _intakeCount++;
+    }
+    notifyListeners();
+  }
+
+  /// Xóa sản phẩm khỏi danh sách quản lý.
+  void removeProduct(String productId) {
+    _products.removeWhere((p) => p.id == productId);
+    _warehouseQuantities.remove(productId);
+    notifyListeners();
   }
 
   /// Cập nhật danh sách sản phẩm khi nạp lại từ backend.
   void updateProducts(List<Product> newProducts) {
     if (newProducts.isNotEmpty) {
       _products = List<Product>.of(newProducts);
+      for (final p in newProducts) {
+        if (!_warehouseQuantities.containsKey(p.id) ||
+            _warehouseQuantities[p.id] == 0) {
+          _warehouseQuantities[p.id] = p.stock;
+        }
+      }
       notifyListeners();
     }
   }
@@ -259,8 +286,18 @@ class StaffController extends ChangeNotifier {
   }
 
   /// trả số lượng của một sản phẩm đang còn trong kho dự trữ.
-  int warehouseQuantity(String productId) =>
-      _warehouseQuantities[productId] ?? 0;
+  int warehouseQuantity(String productId) {
+    if (_warehouseQuantities.containsKey(productId)) {
+      return _warehouseQuantities[productId]!;
+    }
+    final index = _products.indexWhere((p) => p.id == productId);
+    if (index >= 0) {
+      final stock = _products[index].stock;
+      _warehouseQuantities[productId] = stock;
+      return stock;
+    }
+    return 0;
+  }
 
   /// gộp nội dung bốn tầng của một kệ thành bản đồ chỉ đọc.
   Map<String, int> shelfContents(String shelfCode) {

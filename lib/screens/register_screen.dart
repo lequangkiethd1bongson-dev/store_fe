@@ -31,60 +31,78 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  String _determineRole(String email) {
-    final clean = email.toLowerCase();
-    if (clean.contains('warehouse') || clean.contains('kho')) {
-      return 'WAREHOUSE_STAFF';
-    }
-    if (clean.contains('sales') || clean.contains('banhang') || clean.contains('staff') || clean.contains('nhanvien')) {
-      return 'SALES_STAFF';
-    }
-    return 'CUSTOMER';
-  }
+  // String _determineRole(String email) {
+  //   final clean = email.toLowerCase();
+  //   if (clean.contains('warehouse') || clean.contains('kho')) {
+  //     return 'WAREHOUSE_STAFF';
+  //   }
+  //   if (clean.contains('sales') || clean.contains('banhang') || clean.contains('staff') || clean.contains('nhanvien')) {
+  //     return 'SALES_STAFF';
+  //   }
+  //   return 'CUSTOMER';
+  // }
 
   Future<void> _submit() async {
-    if (_isSubmitting || !_formKey.currentState!.validate()) return;
-    final name = _nameController.text.trim();
-    final account = _accountController.text.trim();
-    final password = _passwordController.text;
-    final role = _determineRole(account);
-
-    setState(() => _isSubmitting = true);
-
-    String finalName = name;
-    String finalEmail = account;
-    String finalRole = role;
-
-    try {
-      final authService = AuthService();
-      final res = await authService.register(
-        name: name,
-        account: account,
-        password: password,
-      );
-      if (res['user'] is Map) {
-        final user = res['user'] as Map;
-        finalName = user['name']?.toString() ?? finalName;
-        finalEmail = user['email']?.toString() ?? user['account']?.toString() ?? finalEmail;
-        finalRole = user['role']?.toString() ?? finalRole;
-      }
-    } catch (e) {
-      final errorMsg = e.toString().replaceAll('ApiException: ', '');
-      debugPrint('Đăng ký qua backend API không thành công: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi đăng ký kết nối Backend ($errorMsg). Đang dùng tài khoản Local.'),
-            backgroundColor: Colors.orange.shade800,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+    if (_isSubmitting ||
+        !(_formKey.currentState?.validate() ?? false)) {
+      return;
     }
 
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    widget.onComplete(finalName, finalEmail, finalRole);
+    setState(() => _isSubmitting = true);
+    final authService = AuthService();
+
+    try {
+      final result = await authService.register(
+        name: _nameController.text.trim(),
+        account: _accountController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      final requiresConfirmation =
+          result['emailConfirmationRequired'] == true;
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Đăng ký thành công'),
+          content: Text(
+            requiresConfirmation
+                ? 'Hãy xác nhận email, sau đó chờ Admin kích hoạt tài khoản nhân viên.'
+                : 'Tài khoản đã được tạo. Bạn cần chờ Admin kích hoạt trước khi đăng nhập.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Về đăng nhập'),
+            ),
+          ],
+        ),
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Đăng ký thất bại: '
+                '${e.toString().replaceFirst('ApiException: ', '')}',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      authService.dispose();
+
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override

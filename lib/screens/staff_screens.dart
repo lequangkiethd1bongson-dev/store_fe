@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../core/network/api_client.dart';
+import '../models/restock_models.dart';
 import '../models/store_models.dart';
+import '../services/restock_service.dart';
 import '../state/staff_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'kho_addproduct.dart';
 import 'kho_editproduct.dart';
+import 'restock_screens.dart';
 
 /// cung cấp không gian làm việc riêng cho các thao tác của nhân viên.
 class StaffWorkspace extends StatefulWidget {
@@ -118,49 +122,66 @@ class _StaffWorkspaceState extends State<StaffWorkspace> {
   }
 }
 
-/// GIAO DIỆN PHÂN QUYỀN: 1. Giao diện dành riêng cho Nhân viên Bán hàng (Sales Staff UI)
-/// Chỉ chứa các nghiệp vụ: Sơ đồ kệ, Bán hàng POS tại quầy, Chấm công.
-class SalesStaffWorkspace extends StatefulWidget {
-  const SalesStaffWorkspace({
+/// GIAO DIỆN PHÂN QUYỀN: 1. Giao diện dành riêng cho Nhân viên Cửa hàng (Quản lý cửa hàng & NV Bán hàng)
+class StoreStaffWorkspace extends StatefulWidget {
+  const StoreStaffWorkspace({
     required this.controller,
     required this.staffName,
+    this.userRole = 'SALES_STAFF',
     required this.onExit,
     super.key,
   });
 
   final StaffController controller;
   final String staffName;
+  final String userRole;
   final VoidCallback onExit;
 
   @override
-  State<SalesStaffWorkspace> createState() => _SalesStaffWorkspaceState();
+  State<StoreStaffWorkspace> createState() => _StoreStaffWorkspaceState();
 }
 
-class _SalesStaffWorkspaceState extends State<SalesStaffWorkspace> {
+class _StoreStaffWorkspaceState extends State<StoreStaffWorkspace> {
   int _selectedTab = 0;
 
-  static const _titles = ['Sơ đồ kệ', 'Bán hàng POS', 'Chấm công', 'Tài khoản'];
+  static const _titles = [
+    'Sơ đồ kệ',
+    'Cửa hàng',
+    'Bán hàng POS',
+    'Chấm công',
+    'Tài khoản',
+  ];
+
+  bool get _isStoreManager => widget.userRole == 'STORE_MANAGER';
 
   @override
   Widget build(BuildContext context) {
+    final roleTitle = _isStoreManager ? 'Quản lý cửa hàng' : 'NV Bán hàng';
+
     final pages = [
       _StaffDashboard(
         controller: widget.controller,
         onOpenTab: (index) {
-          if (index == 2) setState(() => _selectedTab = 1);
+          if (index == 1) setState(() => _selectedTab = 1);
+          if (index == 2) setState(() => _selectedTab = 2);
         },
+      ),
+      _StoreProductsScreen(
+        controller: widget.controller,
+        userRole: widget.userRole,
       ),
       _StaffSalesScreen(controller: widget.controller),
       _StaffAttendanceScreen(
         staffName: widget.staffName,
-        roleTitle: 'Nhân viên Bán hàng',
+        roleTitle: roleTitle,
       ),
       _StaffProfileScreen(
         staffName: widget.staffName,
-        roleTitle: 'Nhân viên Bán hàng',
+        roleTitle: roleTitle,
         onLogout: widget.onExit,
       ),
     ];
+
     return Scaffold(
       backgroundColor: AppColors.canvas,
       appBar: AppBar(
@@ -168,15 +189,15 @@ class _SalesStaffWorkspaceState extends State<SalesStaffWorkspace> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(_titles[_selectedTab]),
-            const Text(
-              'NV Bán hàng',
-              style: TextStyle(fontSize: 10, color: Colors.white70),
+            Text(
+              roleTitle,
+              style: const TextStyle(fontSize: 10, color: Colors.white70),
             ),
           ],
         ),
         leading: IconButton(
-          key: const ValueKey('sales-staff-exit'),
-          tooltip: 'Thoát giao diện bán hàng',
+          key: const ValueKey('store-staff-exit'),
+          tooltip: 'Thoát giao diện cửa hàng',
           onPressed: widget.onExit,
           icon: const Icon(Icons.arrow_back_rounded),
         ),
@@ -188,7 +209,7 @@ class _SalesStaffWorkspaceState extends State<SalesStaffWorkspace> {
               backgroundColor: AppColors.blue50,
               child: Text(
                 widget.staffName.isEmpty
-                    ? 'BH'
+                    ? (_isStoreManager ? 'QL' : 'BH')
                     : widget.staffName.characters.first.toUpperCase(),
                 style: const TextStyle(
                   color: AppColors.blue800,
@@ -202,7 +223,7 @@ class _SalesStaffWorkspaceState extends State<SalesStaffWorkspace> {
       ),
       body: IndexedStack(index: _selectedTab, children: pages),
       bottomNavigationBar: NavigationBar(
-        key: const ValueKey('sales-staff-navigation'),
+        key: const ValueKey('store-staff-navigation'),
         selectedIndex: _selectedTab,
         onDestinationSelected: (index) => setState(() => _selectedTab = index),
         destinations: const [
@@ -210,6 +231,11 @@ class _SalesStaffWorkspaceState extends State<SalesStaffWorkspace> {
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard_rounded),
             label: 'Sơ đồ kệ',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.storefront_outlined),
+            selectedIcon: Icon(Icons.storefront_rounded),
+            label: 'Cửa hàng',
           ),
           NavigationDestination(
             icon: Icon(Icons.point_of_sale_outlined),
@@ -232,8 +258,34 @@ class _SalesStaffWorkspaceState extends State<SalesStaffWorkspace> {
   }
 }
 
+/// Tương thích ngược cho SalesStaffWorkspace
+class SalesStaffWorkspace extends StatelessWidget {
+  const SalesStaffWorkspace({
+    required this.controller,
+    required this.staffName,
+    required this.onExit,
+    this.userRole = 'SALES_STAFF',
+    super.key,
+  });
+
+  final StaffController controller;
+  final String staffName;
+  final String userRole;
+  final VoidCallback onExit;
+
+  @override
+  Widget build(BuildContext context) {
+    return StoreStaffWorkspace(
+      controller: controller,
+      staffName: staffName,
+      userRole: userRole,
+      onExit: onExit,
+    );
+  }
+}
+
 /// GIAO DIỆN PHÂN QUYỀN: 2. Giao diện dành riêng cho Nhân viên Kho (Warehouse Staff UI)
-/// Chỉ chứa các nghiệp vụ: Quản lý & nhập kho hàng, Sơ đồ kệ, Chấm công.
+/// Chỉ chứa các nghiệp vụ: Quản lý & nhập kho hàng, Chấm công, Tài khoản.
 class WarehouseStaffWorkspace extends StatefulWidget {
   const WarehouseStaffWorkspace({
     required this.controller,
@@ -253,18 +305,12 @@ class WarehouseStaffWorkspace extends StatefulWidget {
 class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
   int _selectedTab = 0;
 
-  static const _titles = ['Kho hàng', 'Sơ đồ kệ', 'Chấm công', 'Tài khoản'];
+  static const _titles = ['Kho hàng', 'Chấm công', 'Tài khoản'];
 
   @override
   Widget build(BuildContext context) {
     final pages = [
       _StaffInventoryScreen(controller: widget.controller),
-      _StaffDashboard(
-        controller: widget.controller,
-        onOpenTab: (index) {
-          if (index == 1) setState(() => _selectedTab = 0);
-        },
-      ),
       _StaffAttendanceScreen(
         staffName: widget.staffName,
         roleTitle: 'Nhân viên Kho',
@@ -324,11 +370,6 @@ class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
             icon: Icon(Icons.inventory_2_outlined),
             selectedIcon: Icon(Icons.inventory_2_rounded),
             label: 'Kho hàng',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard_rounded),
-            label: 'Sơ đồ kệ',
           ),
           NavigationDestination(
             icon: Icon(Icons.schedule_outlined),
@@ -1260,6 +1301,429 @@ class _ShelfProductRow extends StatelessWidget {
           child: child,
         );
       },
+    );
+  }
+}
+
+/// Màn hình Danh sách sản phẩm tại Cửa hàng (dành cho Quản lý cửa hàng & Nhân viên bán hàng)
+class _StoreProductsScreen extends StatefulWidget {
+  const _StoreProductsScreen({
+    required this.controller,
+    required this.userRole,
+  });
+
+  final StaffController controller;
+  final String userRole;
+
+  @override
+  State<_StoreProductsScreen> createState() => _StoreProductsScreenState();
+}
+
+class _StoreProductsScreenState extends State<_StoreProductsScreen> {
+  final _restockService = RestockService();
+  String _searchText = '';
+  List<StoreStockItem> _storeStockItems = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  bool get _isStoreManager => widget.userRole == 'STORE_MANAGER';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStoreStock();
+  }
+
+  @override
+  void dispose() {
+    _restockService.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadStoreStock() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final items = await _restockService.getStoreStock(
+        keyword: _searchText.trim().isEmpty ? null : _searchText.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _storeStockItems = items;
+        _isLoading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Không nạp được danh sách tồn kệ cửa hàng: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.controller,
+      builder: (context, _) {
+        final query = _searchText.trim().toLowerCase();
+
+        final itemsToDisplay = _storeStockItems.where((item) {
+          if (query.isEmpty) return true;
+          final p = item.product;
+          return p.name.toLowerCase().contains(query) ||
+              (p.barcode != null && p.barcode!.contains(query)) ||
+              p.category.toLowerCase().contains(query) ||
+              (p.brand?.toLowerCase().contains(query) ?? false);
+        }).toList();
+
+        final totalQuantityOnShelf = _storeStockItems.fold<int>(
+          0,
+          (sum, item) => sum + item.quantity,
+        );
+
+        return RefreshIndicator(
+          onRefresh: _loadStoreStock,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            children: [
+              // Thẻ tóm tắt Sản phẩm tại cửa hàng
+              Container(
+                padding: const EdgeInsets.all(17),
+                decoration: BoxDecoration(
+                  color: AppColors.blue50,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.blue100),
+                ),
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      radius: 23,
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.storefront_rounded,
+                          color: AppColors.blue700),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Sản phẩm tại cửa hàng',
+                            style: TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 10,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _isLoading
+                                ? 'Đang nạp...'
+                                : '$totalQuantityOnShelf sản phẩm',
+                            style: const TextStyle(
+                              color: AppColors.blue900,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Tải lại danh sách sản phẩm',
+                      onPressed: _loadStoreStock,
+                      icon: const Icon(Icons.refresh_rounded,
+                          color: AppColors.blue700),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // CHỈ HIỂN THỊ nút Yêu cầu xuất hàng & Phiếu yêu cầu nếu role là STORE_MANAGER
+              if (_isStoreManager) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.blue700,
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 8),
+                        ),
+                        onPressed: () async {
+                          final res = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute(
+                              builder: (_) => CreateRestockRequestScreen(
+                                userRole: widget.userRole,
+                              ),
+                            ),
+                          );
+                          if (res == true) _loadStoreStock();
+                        },
+                        icon: const Icon(Icons.add_shopping_cart_rounded,
+                            size: 18),
+                        label: const Text(
+                          'Yêu cầu xuất hàng từ kho',
+                          style: TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.blue900,
+                          side: const BorderSide(color: AppColors.blue700),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 8),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => RestockRequestsScreen(
+                                userRole: widget.userRole,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.assignment_outlined, size: 18),
+                        label: const Text(
+                          'Phiếu yêu cầu hàng',
+                          style: TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+              ],
+
+              // Tiêu đề khu vực
+              const Text(
+                'Sản phẩm tại cửa hàng',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+
+              // Ô tìm kiếm sản phẩm theo tên hoặc mã vạch
+              TextField(
+                key: const ValueKey('store-product-search'),
+                onChanged: (value) {
+                  setState(() => _searchText = value);
+                  _loadStoreStock();
+                },
+                decoration: const InputDecoration(
+                  hintText: 'Tìm theo tên sản phẩm hoặc mã vạch',
+                  prefixIcon: Icon(Icons.search_rounded),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Khu vực danh sách sản phẩm
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 36),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_errorMessage != null)
+                Card(
+                  color: Colors.red.shade50,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.error_outline_rounded,
+                            color: Colors.red, size: 40),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Chưa tải được tồn kệ từ máy chủ',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.red.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        ElevatedButton.icon(
+                          onPressed: _loadStoreStock,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Thử lại'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (itemsToDisplay.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 36),
+                  child: Center(
+                    child: Text(
+                      'Cửa hàng chưa có sản phẩm nào.',
+                      style: TextStyle(color: AppColors.muted),
+                    ),
+                  ),
+                )
+              else
+                ...itemsToDisplay.map(
+                  (item) => _StoreStockProductCard(
+                    key: ValueKey('store-product-${item.product.id}'),
+                    item: item,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StoreStockProductCard extends StatelessWidget {
+  const _StoreStockProductCard({
+    required this.item,
+    super.key,
+  });
+
+  final StoreStockItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final product = item.product;
+    final isLow = item.isLowStock;
+    final isOut = item.isOutOfStock;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 60,
+                height: 60,
+                child: ProductImage(imageUrl: product.imageUrl),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Mã vạch: ${product.barcode ?? 'Chưa có'}',
+                    style: const TextStyle(color: AppColors.muted, fontSize: 9),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Giá bán: ${formatVnd(product.price)}',
+                    style: const TextStyle(
+                      color: AppColors.blue800,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${item.quantity}',
+                  style: TextStyle(
+                    color: isOut
+                        ? Colors.red
+                        : isLow
+                            ? Colors.orange[800]
+                            : AppColors.blue800,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Text(
+                  'tồn kệ',
+                  style: TextStyle(color: AppColors.muted, fontSize: 8),
+                ),
+                const SizedBox(height: 4),
+                if (isOut)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Hết hàng',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  )
+                else if (isLow)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Sắp hết hàng',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

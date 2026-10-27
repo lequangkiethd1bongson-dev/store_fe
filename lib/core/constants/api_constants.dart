@@ -1,4 +1,3 @@
-
 class ApiConstants {
   ApiConstants._();
 
@@ -10,10 +9,10 @@ class ApiConstants {
   ///    đổi thành IP LAN máy tính của bạn (VD: 'http://192.168.1.7:8080/api')
   /// 3. Nếu chạy trên MÁY ẢO Android (Emulator):
   ///    dùng: 'http://10.0.2.2:8080/api'
-  static const String baseUrl = 'http://10.100.3.212:8080/api';
-  // static const String baseUrl = 'http://10.0.2.2:8080/api';
+  //static const String baseUrl = 'http://10.100.3.212:8080/api';
+  static const String baseUrl = 'http://10.0.2.2:8080/api';
   // static const String baseUrl = 'http://127.0.0.1:8080/api';
-
+  // static const String baseUrl = 'http://192.168.1.7:8080/api';
   /// thời gian chờ tối đa cho một yêu cầu http.
   static const Duration timeout = Duration(seconds: 20);
 
@@ -33,22 +32,22 @@ class ApiConstants {
 
   /// GET  /categories  → danh sách nhóm hàng kèm số lượng sản phẩm.
   static const String categories = '/categories';
-
+  static const String warehouses = '/warehouses';
   // ---------------------------------------------------------------------------
   // TÀI KHOẢN — giao diện đã có, chờ backend.
   // ---------------------------------------------------------------------------
 
   /// POST /auth/login     body: {account, password}
-  static const String login = '/users/login';
+  static const String login = '/auth/login';
 
   /// POST /auth/register  body: {name, account, password}
-  static const String register = '/users/register';
+  static const String register = '/auth/register';
 
   /// GET  /users/me  → thông tin người đang đăng nhập.
-  static const String me = '/users/me';
+  static const String me = '/auth/me';
 
   /// GET / POST  /users/me/addresses  → địa chỉ giao hàng đã lưu.
-  static const String myAddresses = '/users/me/addresses';
+  static const String myAddresses = '/auth/me/addresses';
 
   // ---------------------------------------------------------------------------
   // ĐƠN HÀNG (khách hàng) — giao diện đã có, chờ backend.
@@ -59,10 +58,10 @@ class ApiConstants {
   static const String orders = '/orders';
 
   /// GET  /orders/{id}  → chi tiết đơn.
-  static String orderById(String id) => '/orders/$id';
-
-  /// PATCH /orders/{id}/cancel  → khách hủy đơn đang chờ xác nhận.
-  static String cancelOrder(String id) => '/orders/$id/cancel';
+  // static String orderById(String id) => '/orders/$id';
+  //
+  // /// PATCH /orders/{id}/cancel  → khách hủy đơn đang chờ xác nhận.
+  // static String cancelOrder(String id) => '/orders/$id/cancel';
 
   // ---------------------------------------------------------------------------
   // KHU NHÂN VIÊN (ROLE: STAFF) — chỉ tài khoản nhân viên mới được gọi.
@@ -91,4 +90,21 @@ class ApiConstants {
   /// GET / POST /staff/attendance  → chấm công / điểm danh ca làm của nhân viên.
   /// body: { staffId, type: "CHECK_IN" | "CHECK_OUT", timestamp }
   static const String attendance = '/staff/attendance';
+
+  // ---------------------------------------------------------------------------
+  // QUẢN LÝ CỬA HÀNG & PHIẾU YÊU CẦU HÀNG (ROLE: STORE_MANAGER / SALES)
+  // ---------------------------------------------------------------------------
+
+  /// GET /store/products?keyword= → sản phẩm và tồn kệ cửa hàng hiện tại.
+  static const String storeStock = '/store/products';
+
+  /// GET / POST /store/restock-requests → danh sách hoặc tạo phiếu yêu cầu.
+  static const String restockRequests = '/store/restock-requests';
+
+  /// GET /store/restock-requests/{id} → chi tiết một phiếu yêu cầu.
+  static String restockRequestById(String id) => '/store/restock-requests/$id';
+
+  /// POST /store/stock-exports/{exportId}/confirm-receipt.
+  static String confirmStockReceipt(String exportId) =>
+      '/store/stock-exports/$exportId/confirm-receipt';
 }

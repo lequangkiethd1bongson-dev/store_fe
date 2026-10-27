@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../models/store_models.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import 'register_screen.dart';
@@ -30,71 +29,44 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  String _determineRole(String email) {
-    final clean = email.toLowerCase();
-    if (clean.contains('warehouse') || clean.contains('kho')) {
-      return 'WAREHOUSE_STAFF';
-    }
-    if (clean.contains('sales') || clean.contains('banhang') || clean.contains('staff') || clean.contains('nhanvien')) {
-      return 'SALES_STAFF';
-    }
-    return 'CUSTOMER';
-  }
+  // String _determineRole(String email) {
+  //   final clean = email.toLowerCase();
+  //   if (clean.contains('warehouse') || clean.contains('kho')) {
+  //     return 'WAREHOUSE_STAFF';
+  //   }
+  //   if (clean.contains('sales') || clean.contains('banhang') || clean.contains('staff') || clean.contains('nhanvien')) {
+  //     return 'SALES_STAFF';
+  //   }
+  //   return 'CUSTOMER';
+  // }
 
   Future<void> _submit() async {
-    if (_isSubmitting || !_formKey.currentState!.validate()) return;
-    final account = _accountController.text.trim();
-    final password = _passwordController.text;
-    final inputName = account.split('@').first;
+    if (_isSubmitting || !(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isSubmitting = true);
-
-    String finalName = inputName;
-    String finalEmail = account;
-    String finalRole = _determineRole(account);
-
+    final authService = AuthService();
     try {
-      final authService = AuthService();
-      final res = await authService.login(
-        account: account,
-        password: password,
+      final result = await authService.login(
+        account: _accountController.text.trim(),
+        password: _passwordController.text,
       );
-      final user = res['user'] is Map
-          ? Map<String, dynamic>.from(res['user'] as Map)
-          : res;
-      if (user.isNotEmpty) {
-        finalName = user['name']?.toString() ??
-            user['user_name']?.toString() ??
-            finalName;
-        finalEmail = user['email']?.toString() ??
-            user['account']?.toString() ??
-            finalEmail;
-        final backendRole = user['role']?.toString();
-        if (backendRole != null) {
-          finalRole = switch (UserRole.fromString(backendRole)) {
-            UserRole.warehouseStaff => 'WAREHOUSE_STAFF',
-            UserRole.salesStaff => 'SALES_STAFF',
-            UserRole.staff => 'STAFF',
-            UserRole.customer => 'CUSTOMER',
-          };
-        }
+      final user = Map<String, dynamic>.from(result['user'] as Map);
+      final name = (user['name'] ?? '').toString();
+      final email = (user['email'] ?? '').toString();
+      final role = (user['role'] ?? '').toString();
+      if (name.isEmpty || email.isEmpty || role.isEmpty) {
+        throw const FormatException('Hồ sơ nhân viên thiếu thông tin.');
       }
+      if (!mounted) return;
+      widget.onComplete(name, email, role);
     } catch (e) {
-      final errorMsg = e.toString().replaceAll('ApiException: ', '');
-      debugPrint('Xác thực với backend API không thành công: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Không kết nối được Backend ($errorMsg). Đang dùng tài khoản Local.'),
-            backgroundColor: Colors.orange.shade800,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đăng nhập thất bại: ${e.toString().replaceFirst('ApiException: ', '')}')),
+      );
+    } finally {
+      authService.dispose();
+      if (mounted) setState(() => _isSubmitting = false);
     }
-
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    widget.onComplete(finalName, finalEmail, finalRole);
   }
 
   @override
