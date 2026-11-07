@@ -5,8 +5,7 @@ import '../models/store_models.dart';
 
 /// Dịch vụ gửi và lấy đơn hàng từ backend Java.
 class OrderService {
-  OrderService({ApiClient? apiClient})
-      : _apiClient = apiClient ?? ApiClient();
+  OrderService({ApiClient? apiClient}) : _apiClient = apiClient ?? ApiClient();
 
   final ApiClient _apiClient;
 
@@ -17,11 +16,13 @@ class OrderService {
   }) async {
     final body = {
       'lines': lines
-          .map((line) => {
-                'productId': line.product.id,
-                'quantity': line.quantity,
-                'price': line.product.price,
-              })
+          .map(
+            (line) => {
+              'productId': line.product.id,
+              'quantity': line.quantity,
+              'price': line.product.price,
+            },
+          )
           .toList(),
       'total': total,
     };

@@ -8,8 +8,8 @@ import '../core/network/api_client.dart';
 /// the employee profile/role. Registration never grants an application session.
 class AuthService {
   AuthService({ApiClient? apiClient})
-      : _apiClient = apiClient ?? ApiClient(),
-        _ownsClient = apiClient == null;
+    : _apiClient = apiClient ?? ApiClient(),
+      _ownsClient = apiClient == null;
 
   final ApiClient _apiClient;
   final bool _ownsClient;
@@ -153,8 +153,8 @@ class AuthService {
 
     profile['databaseRole'] = dbRole;
     profile['role'] = _appRoleForDatabaseRole(dbRole);
-    profile['name'] = profile['name']?.toString() ??
-        profile['fullName']?.toString() ?? '';
+    profile['name'] =
+        profile['name']?.toString() ?? profile['fullName']?.toString() ?? '';
     profile['email'] = profile['email']?.toString() ?? '';
     return profile;
   }

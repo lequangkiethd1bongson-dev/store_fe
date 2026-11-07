@@ -58,11 +58,15 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
     _brandController = TextEditingController(text: p.brand ?? '');
     _packageSizeController = TextEditingController(text: p.packageSize ?? '');
     _sellingPriceController = TextEditingController(text: p.price.toString());
-    _importPriceController = TextEditingController(text: (p.importPrice ?? '').toString());
+    _importPriceController = TextEditingController(
+      text: (p.importPrice ?? '').toString(),
+    );
     _stockController = TextEditingController(text: p.stock.toString());
     _descriptionController = TextEditingController(text: p.description ?? '');
     _imageUrlController = TextEditingController(text: p.imageUrl);
-    _selectedCategory = _categories.contains(p.category) ? p.category : _categories.first;
+    _selectedCategory = _categories.contains(p.category)
+        ? p.category
+        : _categories.first;
   }
 
   @override
@@ -94,9 +98,16 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
         ? widget.product.imageUrl
         : _imageUrlController.text.trim();
 
-    final sellingPrice = int.tryParse(_sellingPriceController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? widget.product.price;
-    final importPrice = int.tryParse(_importPriceController.text.replaceAll(RegExp(r'[^0-9]'), ''));
-    final stock = int.tryParse(_stockController.text.trim()) ?? widget.product.stock;
+    final sellingPrice =
+        int.tryParse(
+          _sellingPriceController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+        ) ??
+        widget.product.price;
+    final importPrice = int.tryParse(
+      _importPriceController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+    );
+    final stock =
+        int.tryParse(_stockController.text.trim()) ?? widget.product.stock;
 
     final updatedProduct = Product(
       id: widget.product.id,
@@ -116,7 +127,9 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
 
     final controller = widget.controller;
     if (controller != null) {
-      final index = controller.products.indexWhere((p) => p.id == updatedProduct.id);
+      final index = controller.products.indexWhere(
+        (p) => p.id == updatedProduct.id,
+      );
       if (index != -1) {
         controller.products[index] = updatedProduct;
         controller.notifyListeners();
@@ -145,7 +158,9 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Xác nhận xóa sản phẩm'),
-        content: Text('Bạn có chắc chắn muốn xóa sản phẩm "${widget.product.name}" khỏi kho không?'),
+        content: Text(
+          'Bạn có chắc chắn muốn xóa sản phẩm "${widget.product.name}" khỏi kho không?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -175,7 +190,9 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Đã xóa sản phẩm "${widget.product.name}" khỏi hệ thống.'),
+        content: Text(
+          'Đã xóa sản phẩm "${widget.product.name}" khỏi hệ thống.',
+        ),
         backgroundColor: Colors.orange[800],
       ),
     );
@@ -232,8 +249,10 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
                           width: 48,
                           height: 48,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.inventory_2_rounded, color: Colors.white),
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.inventory_2_rounded,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -255,7 +274,10 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
                           const SizedBox(height: 2),
                           Text(
                             'Mã ID: ${widget.product.id} • SKU',
-                            style: const TextStyle(color: Color(0xFFDCEBFA), fontSize: 11),
+                            style: const TextStyle(
+                              color: Color(0xFFDCEBFA),
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ),
@@ -278,8 +300,9 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
                       labelText: 'Tên sản phẩm (*)',
                       prefixIcon: Icon(Icons.shopping_bag_outlined),
                     ),
-                    validator: (val) =>
-                        val == null || val.trim().isEmpty ? 'Vui lòng nhập tên sản phẩm' : null,
+                    validator: (val) => val == null || val.trim().isEmpty
+                        ? 'Vui lòng nhập tên sản phẩm'
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -298,7 +321,10 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
                       prefixIcon: Icon(Icons.category_outlined),
                     ),
                     items: _categories
-                        .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                        .map(
+                          (cat) =>
+                              DropdownMenuItem(value: cat, child: Text(cat)),
+                        )
                         .toList(),
                     onChanged: (val) {
                       if (val != null) setState(() => _selectedCategory = val);
@@ -348,8 +374,9 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
                             labelText: 'Giá bán lẻ (VNĐ) (*)',
                             prefixIcon: Icon(Icons.sell_outlined),
                           ),
-                          validator: (val) =>
-                              val == null || val.trim().isEmpty ? 'Nhập giá bán' : null,
+                          validator: (val) => val == null || val.trim().isEmpty
+                              ? 'Nhập giá bán'
+                              : null,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -425,11 +452,16 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
                         )
                       : const Icon(Icons.save_rounded, color: Colors.white),
                   label: Text(
-                    _isSubmitting ? 'ĐANG CẬP NHẬT...' : 'CẬP NHẬT THÔNG TIN SẢN PHẨM',
+                    _isSubmitting
+                        ? 'ĐANG CẬP NHẬT...'
+                        : 'CẬP NHẬT THÔNG TIN SẢN PHẨM',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -446,7 +478,10 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
                 style: TextButton.styleFrom(foregroundColor: Colors.red[700]),
                 onPressed: _confirmDelete,
                 icon: const Icon(Icons.delete_forever_rounded),
-                label: const Text('Xóa sản phẩm khỏi kho', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'Xóa sản phẩm khỏi kho',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
 
               const SizedBox(height: 20),

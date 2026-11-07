@@ -43,8 +43,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // }
 
   Future<void> _submit() async {
-    if (_isSubmitting ||
-        !(_formKey.currentState?.validate() ?? false)) {
+    if (_isSubmitting || !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
@@ -60,8 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (!mounted) return;
 
-      final requiresConfirmation =
-          result['emailConfirmationRequired'] == true;
+      final requiresConfirmation = result['emailConfirmationRequired'] == true;
 
       await showDialog<void>(
         context: context,
@@ -91,7 +89,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         SnackBar(
           content: Text(
             'Đăng ký thất bại: '
-                '${e.toString().replaceFirst('ApiException: ', '')}',
+            '${e.toString().replaceFirst('ApiException: ', '')}',
           ),
           backgroundColor: Colors.red,
         ),
@@ -117,11 +115,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
               height: 280,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AppColors.blue900, AppColors.blue700, AppColors.blue600],
+                  colors: [
+                    AppColors.blue900,
+                    AppColors.blue700,
+                    AppColors.blue600,
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(34)),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(34),
+                ),
               ),
               child: Stack(
                 children: [
@@ -130,14 +134,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     top: 16,
                     child: IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                   const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.person_add_rounded, size: 56, color: Colors.white),
+                        Icon(
+                          Icons.person_add_rounded,
+                          size: 56,
+                          color: Colors.white,
+                        ),
                         SizedBox(height: 12),
                         Text(
                           'Tạo tài khoản SSM4',
@@ -150,7 +161,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         SizedBox(height: 4),
                         Text(
                           'Đăng ký thành viên mới cùng hệ thống',
-                          style: TextStyle(color: Color(0xFFD6E8FF), fontSize: 12),
+                          style: TextStyle(
+                            color: Color(0xFFD6E8FF),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -182,8 +196,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           prefixIcon: Icon(Icons.person_outline_rounded),
                           hintText: 'Nhập họ và tên',
                         ),
-                        validator: (val) =>
-                            val == null || val.trim().isEmpty ? 'Vui lòng nhập tên hiển thị' : null,
+                        validator: (val) => val == null || val.trim().isEmpty
+                            ? 'Vui lòng nhập tên hiển thị'
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -196,8 +211,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           prefixIcon: Icon(Icons.mail_outline_rounded),
                           hintText: 'Nhập email hoặc số điện thoại',
                         ),
-                        validator: (val) =>
-                            val == null || val.trim().isEmpty ? 'Vui lòng nhập email hoặc SĐT' : null,
+                        validator: (val) => val == null || val.trim().isEmpty
+                            ? 'Vui lòng nhập email hoặc SĐT'
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -210,12 +226,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           prefixIcon: const Icon(Icons.lock_outline_rounded),
                           hintText: 'Ít nhất 6 ký tự',
                           suffixIcon: IconButton(
-                            onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
-                            icon: Icon(_passwordVisible ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                            onPressed: () => setState(
+                              () => _passwordVisible = !_passwordVisible,
+                            ),
+                            icon: Icon(
+                              _passwordVisible
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
                           ),
                         ),
-                        validator: (val) =>
-                            val == null || val.length < 6 ? 'Mật khẩu cần ít nhất 6 ký tự' : null,
+                        validator: (val) => val == null || val.length < 6
+                            ? 'Mật khẩu cần ít nhất 6 ký tự'
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -228,8 +251,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           prefixIcon: Icon(Icons.lock_reset_rounded),
                           hintText: 'Nhập lại mật khẩu',
                         ),
-                        validator: (val) =>
-                            val != _passwordController.text ? 'Mật khẩu xác nhận không khớp' : null,
+                        validator: (val) => val != _passwordController.text
+                            ? 'Mật khẩu xác nhận không khớp'
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -247,7 +271,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Text(
                                 'ĐĂNG KÝ TÀI KHOẢN',

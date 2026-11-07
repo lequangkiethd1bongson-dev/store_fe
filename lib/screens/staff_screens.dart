@@ -33,7 +33,13 @@ class StaffWorkspace extends StatefulWidget {
 class _StaffWorkspaceState extends State<StaffWorkspace> {
   int _selectedTab = 0;
 
-  static const _titles = ['Sơ đồ', 'Kho hàng', 'Bán hàng', 'Chấm công', 'Tài khoản'];
+  static const _titles = [
+    'Sơ đồ',
+    'Kho hàng',
+    'Bán hàng',
+    'Chấm công',
+    'Tài khoản',
+  ];
 
   /// dựng nội dung tab nhân viên và thanh điều hướng năm chức năng.
   @override
@@ -171,10 +177,7 @@ class _StoreStaffWorkspaceState extends State<StoreStaffWorkspace> {
         userRole: widget.userRole,
       ),
       _StaffSalesScreen(controller: widget.controller),
-      _StaffAttendanceScreen(
-        staffName: widget.staffName,
-        roleTitle: roleTitle,
-      ),
+      _StaffAttendanceScreen(staffName: widget.staffName, roleTitle: roleTitle),
       _StaffProfileScreen(
         staffName: widget.staffName,
         roleTitle: roleTitle,
@@ -285,52 +288,123 @@ class SalesStaffWorkspace extends StatelessWidget {
 }
 
 /// GIAO DIỆN PHÂN QUYỀN: 2. Giao diện dành riêng cho Nhân viên Kho (Warehouse Staff UI)
-/// Chỉ chứa các nghiệp vụ: Quản lý & nhập kho hàng, Chấm công, Tài khoản.
+/// Tích hợp chức năng tiếp nhận & xử lý phiếu yêu cầu dành riêng cho Quản lý kho (kho_manager)
 class WarehouseStaffWorkspace extends StatefulWidget {
   const WarehouseStaffWorkspace({
     required this.controller,
     required this.staffName,
+    this.userRole = 'WAREHOUSE_STAFF',
     required this.onExit,
     super.key,
   });
 
   final StaffController controller;
   final String staffName;
+  final String userRole;
   final VoidCallback onExit;
 
   @override
-  State<WarehouseStaffWorkspace> createState() => _WarehouseStaffWorkspaceState();
+  State<WarehouseStaffWorkspace> createState() =>
+      _WarehouseStaffWorkspaceState();
 }
 
 class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
   int _selectedTab = 0;
 
-  static const _titles = ['Kho hàng', 'Chấm công', 'Tài khoản'];
+  bool get _isWarehouseManager => isWarehouseManagerRole(widget.userRole);
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      _StaffInventoryScreen(controller: widget.controller),
-      _StaffAttendanceScreen(
-        staffName: widget.staffName,
-        roleTitle: 'Nhân viên Kho',
-      ),
-      _StaffProfileScreen(
-        staffName: widget.staffName,
-        roleTitle: 'Nhân viên Kho',
-        onLogout: widget.onExit,
-      ),
-    ];
+    final roleTitle = _isWarehouseManager ? 'Quản lý Kho' : 'Nhân viên Kho';
+
+    final titles = _isWarehouseManager
+        ? const ['Kho hàng', 'Phiếu yêu cầu', 'Chấm công', 'Tài khoản']
+        : const ['Kho hàng', 'Chấm công', 'Tài khoản'];
+
+    final pages = _isWarehouseManager
+        ? [
+            _StaffInventoryScreen(
+              controller: widget.controller,
+              userRole: widget.userRole,
+            ),
+            WarehouseRestockRequestsScreen(userRole: widget.userRole),
+            _StaffAttendanceScreen(
+              staffName: widget.staffName,
+              roleTitle: roleTitle,
+            ),
+            _StaffProfileScreen(
+              staffName: widget.staffName,
+              roleTitle: roleTitle,
+              onLogout: widget.onExit,
+            ),
+          ]
+        : [
+            _StaffInventoryScreen(
+              controller: widget.controller,
+              userRole: widget.userRole,
+            ),
+            _StaffAttendanceScreen(
+              staffName: widget.staffName,
+              roleTitle: roleTitle,
+            ),
+            _StaffProfileScreen(
+              staffName: widget.staffName,
+              roleTitle: roleTitle,
+              onLogout: widget.onExit,
+            ),
+          ];
+
+    final destinations = _isWarehouseManager
+        ? const [
+            NavigationDestination(
+              icon: Icon(Icons.inventory_2_outlined),
+              selectedIcon: Icon(Icons.inventory_2_rounded),
+              label: 'Kho hàng',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.assignment_outlined),
+              selectedIcon: Icon(Icons.assignment_rounded),
+              label: 'Phiếu yêu cầu',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.schedule_outlined),
+              selectedIcon: Icon(Icons.schedule_rounded),
+              label: 'Chấm công',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded),
+              selectedIcon: Icon(Icons.person_rounded),
+              label: 'Tài khoản',
+            ),
+          ]
+        : const [
+            NavigationDestination(
+              icon: Icon(Icons.inventory_2_outlined),
+              selectedIcon: Icon(Icons.inventory_2_rounded),
+              label: 'Kho hàng',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.schedule_outlined),
+              selectedIcon: Icon(Icons.schedule_rounded),
+              label: 'Chấm công',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded),
+              selectedIcon: Icon(Icons.person_rounded),
+              label: 'Tài khoản',
+            ),
+          ];
+
     return Scaffold(
       backgroundColor: AppColors.canvas,
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_titles[_selectedTab]),
-            const Text(
-              'NV Kho',
-              style: TextStyle(fontSize: 10, color: Colors.white70),
+            Text(titles[_selectedTab]),
+            Text(
+              roleTitle,
+              style: const TextStyle(fontSize: 10, color: Colors.white70),
             ),
           ],
         ),
@@ -348,7 +422,7 @@ class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
               backgroundColor: AppColors.blue50,
               child: Text(
                 widget.staffName.isEmpty
-                    ? 'KHO'
+                    ? (_isWarehouseManager ? 'QLK' : 'KHO')
                     : widget.staffName.characters.first.toUpperCase(),
                 style: const TextStyle(
                   color: AppColors.blue800,
@@ -365,23 +439,7 @@ class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
         key: const ValueKey('warehouse-staff-navigation'),
         selectedIndex: _selectedTab,
         onDestinationSelected: (index) => setState(() => _selectedTab = index),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2_rounded),
-            label: 'Kho hàng',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.schedule_outlined),
-            selectedIcon: Icon(Icons.schedule_rounded),
-            label: 'Chấm công',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Tài khoản',
-          ),
-        ],
+        destinations: destinations,
       ),
     );
   }
@@ -417,187 +475,187 @@ class _StaffDashboardState extends State<_StaffDashboard> {
                   )
                   .toList(growable: false);
         return ListView(
-        key: const ValueKey('staff-dashboard'),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.blue900, AppColors.blue700],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          key: const ValueKey('staff-dashboard'),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.blue900, AppColors.blue700],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.blue900.withValues(alpha: 0.18),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.blue900.withValues(alpha: 0.18),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'VẬN HÀNH CỬA HÀNG',
-                  style: TextStyle(
-                    color: Color(0xFFCBE4FF),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Chào ca làm việc mới!',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 21,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                const Text(
-                  'Quản lý kệ, nhập kho và bán hàng tại một nơi.',
-                  style: TextStyle(color: Color(0xFFDCEBFA), fontSize: 11),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _DashboardMetric(
-                        label: 'Sản phẩm trên kệ',
-                        value: '${controller.shelfItemCount}',
-                        icon: Icons.storefront_outlined,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'VẬN HÀNH CỬA HÀNG',
+                    style: TextStyle(
+                      color: Color(0xFFCBE4FF),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _DashboardMetric(
-                        label: 'Trong kho',
-                        value: '${controller.warehouseItemCount}',
-                        icon: Icons.inventory_2_outlined,
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Chào ca làm việc mới!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w800,
                     ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _QuickActionCard(
-                  key: const ValueKey('staff-quick-inventory'),
-                  icon: Icons.qr_code_scanner_rounded,
-                  title: 'Nhập / chuyển kho',
-                  subtitle: 'Quét mã sản phẩm',
-                  tint: AppColors.blue50,
-                  onTap: () => widget.onOpenTab(1),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _QuickActionCard(
-                  key: const ValueKey('staff-quick-sale'),
-                  icon: Icons.point_of_sale_rounded,
-                  title: 'Tạo hóa đơn',
-                  subtitle: 'Quét sản phẩm bán',
-                  tint: const Color(0xFFEAF8F3),
-                  onTap: () => widget.onOpenTab(2),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Khu vực trưng bày',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-                ),
-              ),
-              TextButton(
-                onPressed: () => widget.onOpenTab(0),
-                child: const Text('9 kệ'),
-              ),
-            ],
-          ),
-          const Text(
-            'Tìm tên sản phẩm để đến đúng kệ hoặc chọn một kệ trên sơ đồ.',
-            style: TextStyle(color: AppColors.muted, fontSize: 11),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            key: const ValueKey('staff-shelf-search'),
-            onChanged: (value) => setState(() => _searchText = value),
-            decoration: const InputDecoration(
-              hintText: 'Tìm tên sản phẩm trên kệ',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
-          ),
-          if (matchingProducts.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            ...matchingProducts.map((product) {
-              final location = controller.locationForProduct(product.id);
-              return Card(
-                margin: const EdgeInsets.only(bottom: 5),
-                child: ListTile(
-                  key: ValueKey('staff-shelf-search-result-${product.id}'),
-                  dense: true,
-                  leading: const Icon(
-                    Icons.inventory_2_outlined,
-                    color: AppColors.blue700,
                   ),
-                  title: Text(product.name),
-                  subtitle: Text(
-                    location == null
-                        ? 'Chưa được trưng bày trên kệ'
-                        : 'Kệ ${location.shelfCode} · tầng ${location.tier}',
+                  const SizedBox(height: 5),
+                  const Text(
+                    'Quản lý kệ, nhập kho và bán hàng tại một nơi.',
+                    style: TextStyle(color: Color(0xFFDCEBFA), fontSize: 11),
                   ),
-                  onTap: location == null
-                      ? null
-                      : () => _openShelf(
-                          context,
-                          controller,
-                          StaffController.shelfList.firstWhere(
-                            (shelf) => shelf.code == location.shelfCode,
-                          ),
-                          highlightProductId: product.id,
-                          highlightTier: location.tier,
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DashboardMetric(
+                          label: 'Sản phẩm trên kệ',
+                          value: '${controller.shelfItemCount}',
+                          icon: Icons.storefront_outlined,
                         ),
-                ),
-              );
-            }),
-          ],
-          const SizedBox(height: 13),
-          GridView.builder(
-            itemCount: StaffController.shelfList.length,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 0.94,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _DashboardMetric(
+                          label: 'Trong kho',
+                          value: '${controller.warehouseItemCount}',
+                          icon: Icons.inventory_2_outlined,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            itemBuilder: (context, index) {
-              final shelf = StaffController.shelfList[index];
-              return _ShelfMapCard(
-                shelf: shelf,
-                fillPercent: controller.getShelfFillPercent(shelf.code),
-                lowStockCount: controller.lowStockLines(shelf.code).length,
-                onTap: () => _openShelf(context, controller, shelf),
-              );
-            },
-          ),
-          const SizedBox(height: 14),
-          const _ShelfLegend(),
-        ],
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _QuickActionCard(
+                    key: const ValueKey('staff-quick-inventory'),
+                    icon: Icons.qr_code_scanner_rounded,
+                    title: 'Nhập / chuyển kho',
+                    subtitle: 'Quét mã sản phẩm',
+                    tint: AppColors.blue50,
+                    onTap: () => widget.onOpenTab(1),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _QuickActionCard(
+                    key: const ValueKey('staff-quick-sale'),
+                    icon: Icons.point_of_sale_rounded,
+                    title: 'Tạo hóa đơn',
+                    subtitle: 'Quét sản phẩm bán',
+                    tint: const Color(0xFFEAF8F3),
+                    onTap: () => widget.onOpenTab(2),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Khu vực trưng bày',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => widget.onOpenTab(0),
+                  child: const Text('9 kệ'),
+                ),
+              ],
+            ),
+            const Text(
+              'Tìm tên sản phẩm để đến đúng kệ hoặc chọn một kệ trên sơ đồ.',
+              style: TextStyle(color: AppColors.muted, fontSize: 11),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              key: const ValueKey('staff-shelf-search'),
+              onChanged: (value) => setState(() => _searchText = value),
+              decoration: const InputDecoration(
+                hintText: 'Tìm tên sản phẩm trên kệ',
+                prefixIcon: Icon(Icons.search_rounded),
+              ),
+            ),
+            if (matchingProducts.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              ...matchingProducts.map((product) {
+                final location = controller.locationForProduct(product.id);
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 5),
+                  child: ListTile(
+                    key: ValueKey('staff-shelf-search-result-${product.id}'),
+                    dense: true,
+                    leading: const Icon(
+                      Icons.inventory_2_outlined,
+                      color: AppColors.blue700,
+                    ),
+                    title: Text(product.name),
+                    subtitle: Text(
+                      location == null
+                          ? 'Chưa được trưng bày trên kệ'
+                          : 'Kệ ${location.shelfCode} · tầng ${location.tier}',
+                    ),
+                    onTap: location == null
+                        ? null
+                        : () => _openShelf(
+                            context,
+                            controller,
+                            StaffController.shelfList.firstWhere(
+                              (shelf) => shelf.code == location.shelfCode,
+                            ),
+                            highlightProductId: product.id,
+                            highlightTier: location.tier,
+                          ),
+                  ),
+                );
+              }),
+            ],
+            const SizedBox(height: 13),
+            GridView.builder(
+              itemCount: StaffController.shelfList.length,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 0.94,
+              ),
+              itemBuilder: (context, index) {
+                final shelf = StaffController.shelfList[index];
+                return _ShelfMapCard(
+                  shelf: shelf,
+                  fillPercent: controller.getShelfFillPercent(shelf.code),
+                  lowStockCount: controller.lowStockLines(shelf.code).length,
+                  onTap: () => _openShelf(context, controller, shelf),
+                );
+              },
+            ),
+            const SizedBox(height: 14),
+            const _ShelfLegend(),
+          ],
         );
       },
     );
@@ -870,9 +928,10 @@ class _LegendDot extends StatelessWidget {
 Future<void> _openShelf(
   BuildContext context,
   StaffController controller,
-  StaffShelf shelf,
-  {String? highlightProductId, int? highlightTier}
-) => Navigator.of(context).push<void>(
+  StaffShelf shelf, {
+  String? highlightProductId,
+  int? highlightTier,
+}) => Navigator.of(context).push<void>(
   MaterialPageRoute<void>(
     builder: (_) => StaffShelfDetailScreen(
       controller: controller,
@@ -899,8 +958,7 @@ class StaffShelfDetailScreen extends StatefulWidget {
   final int? highlightTier;
 
   @override
-  State<StaffShelfDetailScreen> createState() =>
-      _StaffShelfDetailScreenState();
+  State<StaffShelfDetailScreen> createState() => _StaffShelfDetailScreenState();
 }
 
 class _StaffShelfDetailScreenState extends State<StaffShelfDetailScreen>
@@ -1044,11 +1102,7 @@ class _StaffShelfDetailScreenState extends State<StaffShelfDetailScreen>
                   ],
                 ),
               ),
-              for (
-                var tier = 1;
-                tier <= StaffController.shelfTierCount;
-                tier++
-              )
+              for (var tier = 1; tier <= StaffController.shelfTierCount; tier++)
                 _ShelfProductRow(
                   key: ValueKey('shelf-tier-${shelf.code}-$tier'),
                   tier: tier,
@@ -1269,7 +1323,9 @@ class _ShelfProductRow extends StatelessWidget {
                   ),
                 ),
               IconButton.filledTonal(
-                tooltip: line == null ? 'Quét hàng vào tầng $tier' : 'Quét thêm hàng',
+                tooltip: line == null
+                    ? 'Quét hàng vào tầng $tier'
+                    : 'Quét thêm hàng',
                 onPressed: onScan,
                 icon: const Icon(Icons.document_scanner_outlined, size: 19),
               ),
@@ -1287,7 +1343,9 @@ class _ShelfProductRow extends StatelessWidget {
         return Container(
           decoration: BoxDecoration(
             border: Border.all(
-              color: AppColors.blue600.withValues(alpha: 0.25 + emphasis * 0.75),
+              color: AppColors.blue600.withValues(
+                alpha: 0.25 + emphasis * 0.75,
+              ),
               width: 1 + emphasis * 2,
             ),
             borderRadius: BorderRadius.circular(14),
@@ -1409,8 +1467,10 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
                     const CircleAvatar(
                       radius: 23,
                       backgroundColor: Colors.white,
-                      child: Icon(Icons.storefront_rounded,
-                          color: AppColors.blue700),
+                      child: Icon(
+                        Icons.storefront_rounded,
+                        color: AppColors.blue700,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1441,8 +1501,10 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
                     IconButton(
                       tooltip: 'Tải lại danh sách sản phẩm',
                       onPressed: _loadStoreStock,
-                      icon: const Icon(Icons.refresh_rounded,
-                          color: AppColors.blue700),
+                      icon: const Icon(
+                        Icons.refresh_rounded,
+                        color: AppColors.blue700,
+                      ),
                     ),
                   ],
                 ),
@@ -1459,7 +1521,9 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.blue700,
                           padding: const EdgeInsets.symmetric(
-                              vertical: 12, horizontal: 8),
+                            vertical: 12,
+                            horizontal: 8,
+                          ),
                         ),
                         onPressed: () async {
                           final res = await Navigator.of(context).push<bool>(
@@ -1471,12 +1535,16 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
                           );
                           if (res == true) _loadStoreStock();
                         },
-                        icon: const Icon(Icons.add_shopping_cart_rounded,
-                            size: 18),
+                        icon: const Icon(
+                          Icons.add_shopping_cart_rounded,
+                          size: 18,
+                        ),
                         label: const Text(
                           'Yêu cầu xuất hàng từ kho',
                           style: TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.bold),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -1487,7 +1555,9 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
                           foregroundColor: AppColors.blue900,
                           side: const BorderSide(color: AppColors.blue700),
                           padding: const EdgeInsets.symmetric(
-                              vertical: 12, horizontal: 8),
+                            vertical: 12,
+                            horizontal: 8,
+                          ),
                         ),
                         onPressed: () {
                           Navigator.of(context).push(
@@ -1502,7 +1572,9 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
                         label: const Text(
                           'Phiếu yêu cầu hàng',
                           style: TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.bold),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -1549,8 +1621,11 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
-                        const Icon(Icons.error_outline_rounded,
-                            color: Colors.red, size: 40),
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          color: Colors.red,
+                          size: 40,
+                        ),
                         const SizedBox(height: 10),
                         const Text(
                           'Chưa tải được tồn kệ từ máy chủ',
@@ -1605,10 +1680,7 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
 }
 
 class _StoreStockProductCard extends StatelessWidget {
-  const _StoreStockProductCard({
-    required this.item,
-    super.key,
-  });
+  const _StoreStockProductCard({required this.item, super.key});
 
   final StoreStockItem item;
 
@@ -1674,8 +1746,8 @@ class _StoreStockProductCard extends StatelessWidget {
                     color: isOut
                         ? Colors.red
                         : isLow
-                            ? Colors.orange[800]
-                            : AppColors.blue800,
+                        ? Colors.orange[800]
+                        : AppColors.blue800,
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                   ),
@@ -1687,8 +1759,10 @@ class _StoreStockProductCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 if (isOut)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.red.shade100,
                       borderRadius: BorderRadius.circular(8),
@@ -1704,8 +1778,10 @@ class _StoreStockProductCard extends StatelessWidget {
                   )
                 else if (isLow)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.orange.shade100,
                       borderRadius: BorderRadius.circular(8),
@@ -1729,9 +1805,13 @@ class _StoreStockProductCard extends StatelessWidget {
 }
 
 class _StaffInventoryScreen extends StatefulWidget {
-  const _StaffInventoryScreen({required this.controller});
+  const _StaffInventoryScreen({
+    required this.controller,
+    this.userRole = 'WAREHOUSE_STAFF',
+  });
 
   final StaffController controller;
+  final String userRole;
 
   @override
   State<_StaffInventoryScreen> createState() => _StaffInventoryScreenState();
@@ -1739,6 +1819,8 @@ class _StaffInventoryScreen extends StatefulWidget {
 
 class _StaffInventoryScreenState extends State<_StaffInventoryScreen> {
   String _searchText = '';
+
+  bool get _isWarehouseManager => isWarehouseManagerRole(widget.userRole);
 
   /// dựng tồn kho và các thao tác nhập hoặc chuyển hàng lên kệ.
   @override
@@ -1757,72 +1839,131 @@ class _StaffInventoryScreenState extends State<_StaffInventoryScreen> {
             )
             .toList(growable: false);
         return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          _InventorySummary(controller: controller),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  key: const ValueKey('inventory-scan-receive'),
-                  onPressed: () => _receiveStock(context, controller),
-                  icon: const Icon(Icons.qr_code_scanner_rounded),
-                  label: const Text('Quét mã nhập kho'),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            _InventorySummary(controller: controller),
+            const SizedBox(height: 14),
+
+            // CHỈ HIỂN THỊ mục "Phiếu yêu cầu từ cửa hàng" nếu role là kho_manager / WAREHOUSE_MANAGER
+            if (_isWarehouseManager) ...[
+              Card(
+                color: AppColors.blue50,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: AppColors.blue100),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  leading: const CircleAvatar(
+                    radius: 20,
+                    backgroundColor: AppColors.blue700,
+                    child: Icon(
+                      Icons.assignment_turned_in_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  title: const Text(
+                    'Phiếu yêu cầu từ cửa hàng',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.blue900,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Duyệt, từ chối và xuất hàng cho các cửa hàng',
+                    style: TextStyle(fontSize: 10, color: AppColors.muted),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.blue700,
+                  ),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => WarehouseRestockRequestsScreen(
+                          userRole: widget.userRole,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.blue900,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+              const SizedBox(height: 14),
+            ],
+
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    key: const ValueKey('inventory-scan-receive'),
+                    onPressed: () => _receiveStock(context, controller),
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    label: const Text('Quét mã nhập kho'),
                   ),
-                  onPressed: () => Navigator.of(context).push<Product>(
-                    MaterialPageRoute<Product>(
-                      builder: (_) => KhoAddProductScreen(
-                        controller: controller,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.blue900,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 12,
+                      ),
+                    ),
+                    onPressed: () => Navigator.of(context).push<Product>(
+                      MaterialPageRoute<Product>(
+                        builder: (_) =>
+                            KhoAddProductScreen(controller: controller),
+                      ),
+                    ),
+                    icon: const Icon(
+                      Icons.add_box_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                    label: const Text(
+                      'Thêm SP mới',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  icon: const Icon(Icons.add_box_rounded, color: Colors.white, size: 18),
-                  label: const Text(
-                    'Thêm SP mới',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Sản phẩm trong kho',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            key: const ValueKey('staff-inventory-search'),
-            onChanged: (value) => setState(() => _searchText = value),
-            decoration: const InputDecoration(
-              hintText: 'Tìm tên, nhóm hàng hoặc thương hiệu',
-              prefixIcon: Icon(Icons.search_rounded),
+              ],
             ),
-          ),
-          const SizedBox(height: 10),
-          ...products.map(
-            (product) => _InventoryProductCard(
-              key: ValueKey('inventory-product-${product.id}'),
-              controller: controller,
-              product: product,
-              onTap: () => _showInventoryProductDetails(
-                context,
-                controller,
-                product,
+            const SizedBox(height: 20),
+            const Text(
+              'Sản phẩm trong kho',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              key: const ValueKey('staff-inventory-search'),
+              onChanged: (value) => setState(() => _searchText = value),
+              decoration: const InputDecoration(
+                hintText: 'Tìm tên, nhóm hàng hoặc thương hiệu',
+                prefixIcon: Icon(Icons.search_rounded),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 10),
+            ...products.map(
+              (product) => _InventoryProductCard(
+                key: ValueKey('inventory-product-${product.id}'),
+                controller: controller,
+                product: product,
+                onTap: () =>
+                    _showInventoryProductDetails(context, controller, product),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -1906,61 +2047,67 @@ class _InventoryProductCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(11),
           child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: 58,
-              height: 58,
-              child: ProductImage(imageUrl: product.imageUrl),
-            ),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Mã: ${StaffController.barcodeByProductId[product.id]}',
-                  style: const TextStyle(color: AppColors.muted, fontSize: 8),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  product.category,
-                  style: const TextStyle(color: AppColors.muted, fontSize: 9),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 7),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                '$quantity',
-                style: const TextStyle(
-                  color: AppColors.blue800,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 58,
+                  height: 58,
+                  child: ProductImage(imageUrl: product.imageUrl),
                 ),
               ),
-              const Text(
-                'trong kho',
-                style: TextStyle(color: AppColors.muted, fontSize: 8),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Mã: ${StaffController.barcodeByProductId[product.id]}',
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 8,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      product.category,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 7),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '$quantity',
+                    style: const TextStyle(
+                      color: AppColors.blue800,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Text(
+                    'trong kho',
+                    style: TextStyle(color: AppColors.muted, fontSize: 8),
+                  ),
+                ],
               ),
             ],
-          ),
-        ],
           ),
         ),
       ),
@@ -1990,7 +2137,9 @@ Future<void> _showInventoryProductDetails(
             ),
             const SizedBox(height: 8),
             Text('Thương hiệu: ${product.brand ?? 'Chưa có thông tin'}'),
-            Text('Dung tích / quy cách: ${product.packageSize ?? 'Chưa có thông tin'}'),
+            Text(
+              'Dung tích / quy cách: ${product.packageSize ?? 'Chưa có thông tin'}',
+            ),
             Text('Nhóm hàng: ${product.category}'),
             Text('Mã vạch: ${product.barcode ?? 'Chưa có mã'}'),
             const SizedBox(height: 8),
@@ -2042,7 +2191,13 @@ Future<void> _showInventoryProductDetails(
                 );
               },
               icon: const Icon(Icons.edit_rounded, color: Colors.white),
-              label: const Text('Sửa thông tin sản phẩm', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              label: const Text(
+                'Sửa thông tin sản phẩm',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         ),
@@ -2401,13 +2556,17 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Nhân viên: ${widget.staffName.isEmpty ? 'Chưa đặt tên' : widget.staffName}'),
+              Text(
+                'Nhân viên: ${widget.staffName.isEmpty ? 'Chưa đặt tên' : widget.staffName}',
+              ),
               const SizedBox(height: 4),
               Text('Vị trí: ${widget.roleTitle}'),
               const SizedBox(height: 4),
               Text('Thời gian: ${_formatTime(now)} — ${_formatDate(now)}'),
               const SizedBox(height: 4),
-              Text('Địa điểm: ${widget.roleTitle.contains('Kho') ? 'Khu vực Kho hàng - SSM4' : 'Quầy Bán hàng POS 01'}'),
+              Text(
+                'Địa điểm: ${widget.roleTitle.contains('Kho') ? 'Khu vực Kho hàng - SSM4' : 'Quầy Bán hàng POS 01'}',
+              ),
             ],
           ),
           actions: [
@@ -2416,7 +2575,9 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
               child: const Text('Hủy'),
             ),
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.blue700),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.blue700,
+              ),
               onPressed: () {
                 Navigator.of(dialogContext).pop();
                 setState(() {
@@ -2425,13 +2586,22 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Vào ca thành công lúc ${_formatTime(now)}! Chúc bạn một ca làm hiệu quả.'),
+                    content: Text(
+                      'Vào ca thành công lúc ${_formatTime(now)}! Chúc bạn một ca làm hiệu quả.',
+                    ),
                     backgroundColor: Colors.green[700],
                   ),
                 );
               },
-              icon: const Icon(Icons.check_circle, color: Colors.white, size: 18),
-              label: const Text('Vào ca ngay', style: TextStyle(color: Colors.white)),
+              icon: const Icon(
+                Icons.check_circle,
+                color: Colors.white,
+                size: 18,
+              ),
+              label: const Text(
+                'Vào ca ngay',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
@@ -2440,17 +2610,15 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
       showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          icon: Icon(
-            Icons.logout_rounded,
-            size: 44,
-            color: Colors.orange[800],
-          ),
+          icon: Icon(Icons.logout_rounded, size: 44, color: Colors.orange[800]),
           title: const Text('Xác nhận Ra ca'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Giờ vào ca: ${_checkInTime != null ? _formatTime(_checkInTime!) : '07:00'}'),
+              Text(
+                'Giờ vào ca: ${_checkInTime != null ? _formatTime(_checkInTime!) : '07:00'}',
+              ),
               const SizedBox(height: 4),
               Text('Giờ ra ca: ${_formatTime(now)}'),
               const SizedBox(height: 4),
@@ -2463,11 +2631,15 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
               child: const Text('Hủy'),
             ),
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800]),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange[800],
+              ),
               onPressed: () {
                 Navigator.of(dialogContext).pop();
                 final timeStr = _formatTime(now);
-                final checkInStr = _checkInTime != null ? _formatTime(_checkInTime!) : '07:00';
+                final checkInStr = _checkInTime != null
+                    ? _formatTime(_checkInTime!)
+                    : '07:00';
                 setState(() {
                   _isCheckedIn = false;
                   _history.insert(0, {
@@ -2480,13 +2652,22 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Ra ca thành công lúc $timeStr. Đã ghi nhận công làm việc!'),
+                    content: Text(
+                      'Ra ca thành công lúc $timeStr. Đã ghi nhận công làm việc!',
+                    ),
                     backgroundColor: AppColors.blue700,
                   ),
                 );
               },
-              icon: const Icon(Icons.check_circle, color: Colors.white, size: 18),
-              label: const Text('Xác nhận Ra ca', style: TextStyle(color: Colors.white)),
+              icon: const Icon(
+                Icons.check_circle,
+                color: Colors.white,
+                size: 18,
+              ),
+              label: const Text(
+                'Xác nhận Ra ca',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
@@ -2552,7 +2733,9 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.staffName.isEmpty ? 'Nhân viên SSM4' : widget.staffName,
+                            widget.staffName.isEmpty
+                                ? 'Nhân viên SSM4'
+                                : widget.staffName,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -2571,29 +2754,40 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
                     ],
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: _isCheckedIn
                           ? Colors.greenAccent.shade400.withValues(alpha: 0.25)
                           : Colors.amber.shade300.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: _isCheckedIn ? Colors.greenAccent : Colors.amberAccent,
+                        color: _isCheckedIn
+                            ? Colors.greenAccent
+                            : Colors.amberAccent,
                       ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          _isCheckedIn ? Icons.check_circle : Icons.access_time_filled,
-                          color: _isCheckedIn ? Colors.greenAccent : Colors.amberAccent,
+                          _isCheckedIn
+                              ? Icons.check_circle
+                              : Icons.access_time_filled,
+                          color: _isCheckedIn
+                              ? Colors.greenAccent
+                              : Colors.amberAccent,
                           size: 13,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           _isCheckedIn ? 'Đang trong ca' : 'Chưa vào ca',
                           style: TextStyle(
-                            color: _isCheckedIn ? Colors.greenAccent : Colors.amberAccent,
+                            color: _isCheckedIn
+                                ? Colors.greenAccent
+                                : Colors.amberAccent,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                           ),
@@ -2656,7 +2850,9 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
         // Nút Thao tác Chấm công chính
         Card(
           elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -2664,8 +2860,12 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
                 Row(
                   children: [
                     Icon(
-                      _isCheckedIn ? Icons.logout_rounded : Icons.fingerprint_rounded,
-                      color: _isCheckedIn ? Colors.orange[800] : AppColors.blue700,
+                      _isCheckedIn
+                          ? Icons.logout_rounded
+                          : Icons.fingerprint_rounded,
+                      color: _isCheckedIn
+                          ? Colors.orange[800]
+                          : AppColors.blue700,
                       size: 28,
                     ),
                     const SizedBox(width: 12),
@@ -2674,7 +2874,9 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _isCheckedIn ? 'Kết thúc ca làm việc' : 'Điểm danh Vào ca',
+                            _isCheckedIn
+                                ? 'Kết thúc ca làm việc'
+                                : 'Điểm danh Vào ca',
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
@@ -2700,18 +2902,24 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
                   height: 48,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _isCheckedIn ? Colors.orange[800] : AppColors.blue700,
+                      backgroundColor: _isCheckedIn
+                          ? Colors.orange[800]
+                          : AppColors.blue700,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     onPressed: _handleAttendanceAction,
                     icon: Icon(
-                      _isCheckedIn ? Icons.logout_rounded : Icons.camera_front_rounded,
+                      _isCheckedIn
+                          ? Icons.logout_rounded
+                          : Icons.camera_front_rounded,
                       color: Colors.white,
                     ),
                     label: Text(
-                      _isCheckedIn ? 'XÁC NHẬN RA CA (CHECK-OUT)' : 'XÁC NHẬN VÀO CA (CHECK-IN)',
+                      _isCheckedIn
+                          ? 'XÁC NHẬN RA CA (CHECK-OUT)'
+                          : 'XÁC NHẬN VÀO CA (CHECK-IN)',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 13,
@@ -2789,10 +2997,15 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
         ..._history.map(
           (item) => Card(
             margin: const EdgeInsets.only(bottom: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: ListTile(
               dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 4,
+              ),
               leading: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -2807,7 +3020,10 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
               ),
               title: Text(
                 item['date'] ?? '',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
               ),
               subtitle: Text(
                 'Vào: ${item['checkIn']}  |  Ra: ${item['checkOut']}\n${item['shift']}',
@@ -2968,7 +3184,10 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
                 ),
               );
             },
-            child: const Text('Lưu thay đổi', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Lưu thay đổi',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -3017,7 +3236,10 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
                 ),
               );
             },
-            child: const Text('Đổi mật khẩu', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Đổi mật khẩu',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -3026,10 +3248,12 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final displayName =
-        widget.staffName.isEmpty ? 'Nhân viên SSM4' : widget.staffName;
-    final staffId =
-        widget.roleTitle.contains('Kho') ? 'NV-KHO-8932' : 'NV-POS-1042';
+    final displayName = widget.staffName.isEmpty
+        ? 'Nhân viên SSM4'
+        : widget.staffName;
+    final staffId = widget.roleTitle.contains('Kho')
+        ? 'NV-KHO-8932'
+        : 'NV-POS-1042';
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -3077,8 +3301,10 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
               ),
               const SizedBox(height: 4),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
@@ -3100,8 +3326,9 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
 
         // Khối Thông tin Công việc
         Card(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -3112,13 +3339,17 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
                   children: [
                     const Text(
                       'Thông tin hồ sơ',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     IconButton(
                       tooltip: 'Chỉnh sửa thông tin',
-                      icon: const Icon(Icons.edit_note_rounded,
-                          color: AppColors.blue700),
+                      icon: const Icon(
+                        Icons.edit_note_rounded,
+                        color: AppColors.blue700,
+                      ),
                       onPressed: _showEditProfileDialog,
                     ),
                   ],
@@ -3158,36 +3389,46 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
 
         // Khối Cài đặt & Tùy chọn
         Card(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Column(
             children: [
               ListTile(
-                leading: const Icon(Icons.lock_reset_rounded,
-                    color: AppColors.blue700),
-                title: const Text('Đổi mật khẩu',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                leading: const Icon(
+                  Icons.lock_reset_rounded,
+                  color: AppColors.blue700,
+                ),
+                title: const Text(
+                  'Đổi mật khẩu',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: _showChangePasswordDialog,
               ),
               const Divider(height: 1, indent: 16, endIndent: 16),
               SwitchListTile(
-                secondary: const Icon(Icons.notifications_active_outlined,
-                    color: AppColors.blue700),
-                title: const Text('Thông báo ca làm & cảnh báo',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                secondary: const Icon(
+                  Icons.notifications_active_outlined,
+                  color: AppColors.blue700,
+                ),
+                title: const Text(
+                  'Thông báo ca làm & cảnh báo',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
                 value: _notifyLowStock,
                 onChanged: (val) => setState(() => _notifyLowStock = val),
               ),
               const Divider(height: 1, indent: 16, endIndent: 16),
               SwitchListTile(
-                secondary: const Icon(Icons.mark_email_unread_outlined,
-                    color: AppColors.blue700),
-                title: const Text('Nhận email báo cáo ca làm',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                secondary: const Icon(
+                  Icons.mark_email_unread_outlined,
+                  color: AppColors.blue700,
+                ),
+                title: const Text(
+                  'Nhận email báo cáo ca làm',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
                 value: _notifyNewOrder,
                 onChanged: (val) => setState(() => _notifyNewOrder = val),
               ),
@@ -3241,8 +3482,10 @@ class _ProfileInfoTile extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: AppColors.muted),
           const SizedBox(width: 10),
-          Text('$label: ',
-              style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+          Text(
+            '$label: ',
+            style: const TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
           Expanded(
             child: Text(
               value,
@@ -3462,10 +3705,7 @@ Future<int?> _askQuantity(
               const SizedBox(height: 5),
               Text(
                 '${product.packageSize ?? 'Chưa rõ quy cách'} · ${product.brand ?? 'Chưa có thương hiệu'}',
-                style: const TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 11,
-                ),
+                style: const TextStyle(color: AppColors.muted, fontSize: 11),
               ),
               const SizedBox(height: 14),
             ],
@@ -3569,10 +3809,7 @@ void _showLowStockDetails(
   showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
-      icon: const Icon(
-        Icons.warning_amber_rounded,
-        color: Color(0xFFD83D4D),
-      ),
+      icon: const Icon(Icons.warning_amber_rounded, color: Color(0xFFD83D4D)),
       title: Text('Sắp hết hàng · tầng $tier'),
       content: Text(
         '${line.product.name} (${line.product.packageSize ?? 'chưa rõ quy cách'}) '

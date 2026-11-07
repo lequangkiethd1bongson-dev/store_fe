@@ -71,7 +71,9 @@ class ApiClient {
 
     final http.Response response;
     try {
-      final streamed = await _client.send(request).timeout(ApiConstants.timeout);
+      final streamed = await _client
+          .send(request)
+          .timeout(ApiConstants.timeout);
       response = await http.Response.fromStream(streamed);
     } on TimeoutException {
       throw const ApiException('Máy chủ phản hồi quá lâu, vui lòng thử lại.');

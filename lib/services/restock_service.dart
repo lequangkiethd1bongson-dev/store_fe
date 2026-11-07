@@ -100,4 +100,90 @@ class RestockService {
     await _apiClient.post(ApiConstants.confirmStockReceipt(exportId));
     return getRequestById(requestId);
   }
+
+  // ---------------------------------------------------------------------------
+  // PHÂN HỆ QUẢN LÝ KHO (ROLE: WAREHOUSE_MANAGER / KHO_MANAGER)
+  // ---------------------------------------------------------------------------
+
+  /// GET /warehouse/restock-requests?status= — Lấy danh sách phiếu gửi tới kho phụ trách.
+  Future<List<RestockRequest>> getWarehouseRequests({String? status}) async {
+    final data = await _apiClient.get(
+      ApiConstants.warehouseRestockRequests,
+      query: {'status': status},
+    );
+    final dynamic items = data is Map ? data['content'] : data;
+
+    if (items is! List) {
+      throw const FormatException(
+        'Dữ liệu phiếu yêu cầu từ kho API không phải dạng danh sách.',
+      );
+    }
+
+    return items
+        .whereType<Map>()
+        .map((item) => RestockRequest.fromJson(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+  }
+
+  /// GET /warehouse/restock-requests/{id} — Lấy chi tiết phiếu phía kho.
+  Future<RestockRequest> getWarehouseRequestById(String id) async {
+    final data = await _apiClient.get(
+      ApiConstants.warehouseRestockRequestById(id),
+    );
+    if (data is! Map) {
+      throw const FormatException(
+        'Dữ liệu chi tiết phiếu yêu cầu kho không hợp lệ.',
+      );
+    }
+    return RestockRequest.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  /// POST /warehouse/restock-requests/{id}/approve — Duyệt phiếu yêu cầu cấp hàng.
+  Future<RestockRequest> approveRequest({
+    required String requestId,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final body = <String, dynamic>{'items': items};
+    final data = await _apiClient.post(
+      ApiConstants.approveWarehouseRestockRequest(requestId),
+      body: body,
+    );
+
+    if (data is Map) {
+      return RestockRequest.fromJson(Map<String, dynamic>.from(data));
+    }
+    return getWarehouseRequestById(requestId);
+  }
+
+  /// POST /warehouse/restock-requests/{id}/reject — Từ chối phiếu yêu cầu cấp hàng.
+  Future<RestockRequest> rejectRequest({
+    required String requestId,
+    required String rejectReason,
+  }) async {
+    final body = <String, dynamic>{
+      'rejectReason': rejectReason.trim(),
+      'reason': rejectReason.trim(),
+    };
+    final data = await _apiClient.post(
+      ApiConstants.rejectWarehouseRestockRequest(requestId),
+      body: body,
+    );
+
+    if (data is Map) {
+      return RestockRequest.fromJson(Map<String, dynamic>.from(data));
+    }
+    return getWarehouseRequestById(requestId);
+  }
+
+  /// POST /warehouse/restock-requests/{id}/export — Xuất kho gửi cửa hàng.
+  Future<RestockRequest> exportRequest({required String requestId}) async {
+    final data = await _apiClient.post(
+      ApiConstants.exportWarehouseRestockRequest(requestId),
+    );
+
+    if (data is Map) {
+      return RestockRequest.fromJson(Map<String, dynamic>.from(data));
+    }
+    return getWarehouseRequestById(requestId);
+  }
 }

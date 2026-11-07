@@ -74,6 +74,7 @@ class RestockRequestItem {
     this.productName,
     this.productImage,
     this.productBarcode,
+    this.warehouseStock,
   });
 
   final String productId;
@@ -82,6 +83,7 @@ class RestockRequestItem {
   final String? productName;
   final String? productImage;
   final String? productBarcode;
+  final int? warehouseStock;
 
   factory RestockRequestItem.fromJson(Map<String, dynamic> json) {
     final pMap = json['product'] is Map ? json['product'] as Map : null;
@@ -110,6 +112,15 @@ class RestockRequestItem {
       productBarcode:
           (json['barcode'] ?? json['productBarcode'] ?? pMap?['barcode'])
               ?.toString(),
+      warehouseStock: _toInt(
+        json['warehouseStock'] ??
+            json['warehouse_stock'] ??
+            json['currentStock'] ??
+            json['current_stock'] ??
+            json['stock'] ??
+            pMap?['warehouseStock'] ??
+            pMap?['stock'],
+      ),
     );
   }
 
@@ -118,6 +129,7 @@ class RestockRequestItem {
     'quantity': requestedQuantity,
     'requestedQuantity': requestedQuantity,
     if (approvedQuantity != null) 'approvedQuantity': approvedQuantity,
+    if (warehouseStock != null) 'warehouseStock': warehouseStock,
   };
 
   static int? _toInt(dynamic val) {
@@ -163,6 +175,14 @@ class RestockRequest {
   final String? exportId;
   final String? exportStatus; // 'shipping', 'delivered'
   final int? itemCount;
+
+  bool get isPending => status.toLowerCase() == 'pending';
+  bool get isApproved => status.toLowerCase() == 'approved';
+  bool get isRejected => status.toLowerCase() == 'rejected';
+  bool get isExported =>
+      status.toLowerCase() == 'exported' || status.toLowerCase() == 'shipping';
+  bool get isReceived =>
+      status.toLowerCase() == 'received' || status.toLowerCase() == 'delivered';
 
   bool get isShipping =>
       exportStatus == 'shipping' ||

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'core/network/api_client.dart';
 import 'services/auth_service.dart';
 
@@ -33,10 +34,7 @@ Future<void> main() async {
     defaultValue: 'sb_publishable_fGGwRPSnIamIZrUqSLtHuQ_eLJ8sonf',
   );
 
-  await Supabase.initialize(
-    url: supabaseUrl,
-    publishableKey: publishableKey,
-  );
+  await Supabase.initialize(url: supabaseUrl, publishableKey: publishableKey);
 
   final auth = Supabase.instance.client.auth;
   ApiClient.authToken = auth.currentSession?.accessToken;
@@ -68,7 +66,6 @@ class _SmartMartAppState extends State<SmartMartApp> {
   String _userName = '';
   String _userEmail = '';
   String _userRole = 'CUSTOMER';
-
 
   @override
   void initState() {
@@ -123,10 +120,15 @@ class _SmartMartAppState extends State<SmartMartApp> {
         userRole: _userRole,
         onExit: () => _updateSession(null, null),
       );
-    } else if (_userRole == 'WAREHOUSE_STAFF' || _userRole == 'WAREHOUSE_MANAGER') {
+    } else if (_userRole == 'WAREHOUSE_STAFF' ||
+        _userRole == 'WAREHOUSE_MANAGER' ||
+        _userRole == 'KHO_MANAGER' ||
+        _userRole == 'kho_manager' ||
+        _userRole == 'kho') {
       homeWidget = WarehouseStaffWorkspace(
         controller: _staffController,
         staffName: _userName,
+        userRole: _userRole,
         onExit: () => _updateSession(null, null),
       );
     } else if (_userRole == 'ADMIN') {
@@ -195,7 +197,9 @@ class _SmartMartAppState extends State<SmartMartApp> {
     final authService = AuthService();
     try {
       final profile = await authService.getMe();
-      final name = (profile['name'] ?? profile['fullName'] ?? '').toString().trim();
+      final name = (profile['name'] ?? profile['fullName'] ?? '')
+          .toString()
+          .trim();
       final email = (profile['email'] ?? '').toString().trim();
       final role = (profile['role'] ?? '').toString().trim().toUpperCase();
 
@@ -204,6 +208,9 @@ class _SmartMartAppState extends State<SmartMartApp> {
         'SALES_STAFF',
         'WAREHOUSE_STAFF',
         'WAREHOUSE_MANAGER',
+        'KHO_MANAGER',
+        'KHO_STAFF',
+        'KHO',
         'ADMIN',
       };
 
@@ -216,11 +223,7 @@ class _SmartMartAppState extends State<SmartMartApp> {
         );
       }
 
-      return <String, String>{
-        'name': name,
-        'email': email,
-        'role': role,
-      };
+      return <String, String>{'name': name, 'email': email, 'role': role};
     } finally {
       authService.dispose();
     }
@@ -250,10 +253,10 @@ class _SmartMartAppState extends State<SmartMartApp> {
   /// Khi màn hình đăng nhập đầu tiên gọi callback, xác minh profile lần nữa ở lớp gốc.
   /// Điều này chặn callback cũ/local đi tiếp nếu không có session thật.
   Future<void> _completeInitialLogin(
-      String name,
-      String email,
-      String role,
-      ) async {
+    String name,
+    String email,
+    String role,
+  ) async {
     if (Supabase.instance.client.auth.currentSession == null) {
       ApiClient.authToken = null;
       debugPrint('Bỏ qua callback đăng nhập vì không có Supabase session.');
@@ -275,10 +278,10 @@ class _SmartMartAppState extends State<SmartMartApp> {
   /// Cập nhật phiên từ callback chung. Role truyền từ UI không được tin cậy;
   /// dữ liệu thật luôn được đọc lại từ Java/employee profile.
   Future<void> _updateSession(
-      String? name,
-      String? email, [
-        String? role,
-      ]) async {
+    String? name,
+    String? email, [
+    String? role,
+  ]) async {
     if (name == null || email == null) {
       await _clearSavedSession(signOut: true);
       return;
@@ -325,7 +328,6 @@ class _SmartMartAppState extends State<SmartMartApp> {
       _showLoginWelcome = false;
     });
   }
-
 }
 
 /// Guard tạm cho role ADMIN: không để tài khoản quản trị rơi vào giao diện khách hàng.
@@ -389,9 +391,9 @@ class _AdminRouteGuardScreen extends StatelessWidget {
                     const SizedBox(height: 20),
                     const Text(
                       'Đăng nhập Admin đã được xác minh. Tuy nhiên, main.dart '
-                          'chưa được nối với màn hình quản trị/cấp quyền thực tế. '
-                          'Tài khoản Admin được giữ ở màn hình này thay vì bị '
-                          'đưa vào giao diện khách hàng.',
+                      'chưa được nối với màn hình quản trị/cấp quyền thực tế. '
+                      'Tài khoản Admin được giữ ở màn hình này thay vì bị '
+                      'đưa vào giao diện khách hàng.',
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 20),
@@ -514,7 +516,7 @@ class _RootShellState extends State<RootShell> {
           },
         ),
       ),
-          (route) => route.isFirst,
+      (route) => route.isFirst,
     );
   }
 
@@ -605,33 +607,36 @@ class _RootShellState extends State<RootShell> {
 
   /// mở màn hình đăng nhập và cập nhật thông tin khi người dùng hoàn tất.
   Future<void> _openLogin() async {
-    final credentials = await Navigator.of(context).push<(String, String, String)>(
-      PageRouteBuilder<(String, String, String)>(
-        transitionDuration: const Duration(milliseconds: 420),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, animation, secondaryAnimation) => LoginScreen(
-          onComplete: (name, email, role) =>
-              Navigator.of(context).pop((name, email, role)),
-        ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-            FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position:
-                Tween<Offset>(
-                  begin: const Offset(0, 0.035),
-                  end: Offset.zero,
-                ).animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
+    final credentials = await Navigator.of(context)
+        .push<(String, String, String)>(
+          PageRouteBuilder<(String, String, String)>(
+            transitionDuration: const Duration(milliseconds: 420),
+            reverseTransitionDuration: const Duration(milliseconds: 300),
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                LoginScreen(
+                  onComplete: (name, email, role) =>
+                      Navigator.of(context).pop((name, email, role)),
                 ),
-                child: child,
-              ),
-            ),
-      ),
-    );
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) =>
+                    FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position:
+                            Tween<Offset>(
+                              begin: const Offset(0, 0.035),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            ),
+                        child: child,
+                      ),
+                    ),
+          ),
+        );
     if (credentials == null || !mounted) return;
 
     await widget.onAuthChanged(credentials.$1, credentials.$2, credentials.$3);
@@ -722,15 +727,15 @@ class _RootShellState extends State<RootShell> {
       transitionBuilder: (context, animation, secondaryAnimation, child) =>
           SlideTransition(
             position:
-            Tween<Offset>(
-              begin: const Offset(-1, 0),
-              end: Offset.zero,
-            ).animate(
-              CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              ),
-            ),
+                Tween<Offset>(
+                  begin: const Offset(-1, 0),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
             child: child,
           ),
     );
@@ -749,10 +754,10 @@ class _FixedScrollBehavior extends MaterialScrollBehavior {
   /// bỏ hiệu ứng trang trí ở mép khi danh sách cuộn quá giới hạn.
   @override
   Widget buildOverscrollIndicator(
-      BuildContext context,
-      Widget child,
-      ScrollableDetails details,
-      ) => child;
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
 }
 
 class _CartNavIcon extends StatelessWidget {
@@ -807,10 +812,10 @@ class _GlassBottomNavigation extends StatelessWidget {
     (Icons.home_outlined, Icons.home_rounded, 'Trang chủ', 0),
     (Icons.grid_view_rounded, Icons.grid_view_rounded, 'Danh mục', 1),
     (
-    Icons.qr_code_scanner_rounded,
-    Icons.qr_code_scanner_rounded,
-    'Quét mã QR',
-    null,
+      Icons.qr_code_scanner_rounded,
+      Icons.qr_code_scanner_rounded,
+      'Quét mã QR',
+      null,
     ),
     (Icons.shopping_cart_outlined, Icons.shopping_cart_rounded, 'Giỏ hàng', 2),
     (Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Đơn hàng', 3),
@@ -873,35 +878,35 @@ class _GlassBottomNavigation extends StatelessWidget {
                               child: Center(
                                 child: item.$4 == null
                                     ? Container(
-                                  width: 34,
-                                  height: 34,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.blue700,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.blue900
-                                            .withValues(alpha: 0.24),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Icon(
-                                    Icons.qr_code_scanner_rounded,
-                                    size: 19,
-                                    color: Colors.white,
-                                  ),
-                                )
+                                        width: 34,
+                                        height: 34,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.blue700,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppColors.blue900
+                                                  .withValues(alpha: 0.24),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.qr_code_scanner_rounded,
+                                          size: 19,
+                                          color: Colors.white,
+                                        ),
+                                      )
                                     : item.$4 == 2
                                     ? _CartNavIcon(count: cartCount)
                                     : Icon(
-                                  icon,
-                                  size: 23,
-                                  color: selected
-                                      ? AppColors.blue700
-                                      : AppColors.blue800,
-                                ),
+                                        icon,
+                                        size: 23,
+                                        color: selected
+                                            ? AppColors.blue700
+                                            : AppColors.blue800,
+                                      ),
                               ),
                             ),
                             const SizedBox(height: 2),

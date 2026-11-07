@@ -107,4 +107,27 @@ class ApiConstants {
   /// POST /store/stock-exports/{exportId}/confirm-receipt.
   static String confirmStockReceipt(String exportId) =>
       '/store/stock-exports/$exportId/confirm-receipt';
+
+  // ---------------------------------------------------------------------------
+  // QUẢN LÝ KHO TIẾP NHẬN & XỬ LÝ PHIẾU YÊU CẦU (ROLE: WAREHOUSE_MANAGER / KHO_MANAGER)
+  // ---------------------------------------------------------------------------
+
+  /// GET /warehouse/restock-requests?status= → danh sách phiếu yêu cầu gửi đến kho.
+  static const String warehouseRestockRequests = '/warehouse/restock-requests';
+
+  /// GET /warehouse/restock-requests/{id} → chi tiết phiếu yêu cầu tại kho.
+  static String warehouseRestockRequestById(String id) =>
+      '/warehouse/restock-requests/$id';
+
+  /// POST /warehouse/restock-requests/{id}/approve → duyệt phiếu yêu cầu.
+  static String approveWarehouseRestockRequest(String id) =>
+      '/warehouse/restock-requests/$id/approve';
+
+  /// POST /warehouse/restock-requests/{id}/reject → từ chối phiếu yêu cầu.
+  static String rejectWarehouseRestockRequest(String id) =>
+      '/warehouse/restock-requests/$id/reject';
+
+  /// POST /warehouse/restock-requests/{id}/export → xuất kho gửi cửa hàng.
+  static String exportWarehouseRestockRequest(String id) =>
+      '/warehouse/restock-requests/$id/export';
 }

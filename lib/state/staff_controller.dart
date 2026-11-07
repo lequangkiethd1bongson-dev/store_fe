@@ -46,10 +46,7 @@ class StaffStockReceipt {
 
 /// xác định kệ và tầng hiện đang chứa một sản phẩm.
 class StaffProductLocation {
-  const StaffProductLocation({
-    required this.shelfCode,
-    required this.tier,
-  });
+  const StaffProductLocation({required this.shelfCode, required this.tier});
 
   final String shelfCode;
   final int tier;
@@ -209,24 +206,30 @@ class StaffController extends ChangeNotifier {
 
   /// trả về hóa đơn ở dạng chỉ đọc để màn hình không sửa trực tiếp dữ liệu.
   List<StaffSale> get sales => List.unmodifiable(_sales);
+
   /// cho biết số lượt nhập kho đã ghi nhận trong phiên hiện tại.
   int get intakeCount => _intakeCount;
+
   /// cộng số lượng sản phẩm đang nằm trong kho dự trữ.
-  int get warehouseItemCount => _warehouseQuantities.values.fold(
-    0,
-    (sum, quantity) => sum + quantity,
-  );
+  int get warehouseItemCount =>
+      _warehouseQuantities.values.fold(0, (sum, quantity) => sum + quantity);
+
   /// cộng số lượng sản phẩm đang được trưng bày trên tất cả các kệ.
   int get shelfItemCount => _shelfQuantities.values.fold(
     0,
-    (sum, shelf) => sum + shelf.values.fold(
-      0,
-      (shelfSum, tier) =>
-          shelfSum + tier.values.fold(0, (tierSum, count) => tierSum + count),
-    ),
+    (sum, shelf) =>
+        sum +
+        shelf.values.fold(
+          0,
+          (shelfSum, tier) =>
+              shelfSum +
+              tier.values.fold(0, (tierSum, count) => tierSum + count),
+        ),
   );
+
   /// trả số hóa đơn đã hoàn tất trong phiên hiện tại.
   int get saleCount => _sales.length;
+
   /// trả lịch sử các lần nhập kho để xem ngày tiếp nhận hàng.
   List<StaffStockReceipt> get stockReceipts =>
       List.unmodifiable(_stockReceipts);
@@ -235,10 +238,8 @@ class StaffController extends ChangeNotifier {
   List<CartLine> get saleLines => _saleCart.entries
       .where((entry) => entry.value > 0)
       .map(
-        (entry) => CartLine(
-          product: productById(entry.key),
-          quantity: entry.value,
-        ),
+        (entry) =>
+            CartLine(product: productById(entry.key), quantity: entry.value),
       )
       .toList(growable: false);
 
@@ -267,16 +268,16 @@ class StaffController extends ChangeNotifier {
         name: id == 'milk'
             ? 'Sữa tươi Vinamilk'
             : id == 'apple'
-                ? 'Táo Envy'
-                : id == 'eggs'
-                    ? 'Trứng gà sạch'
-                    : id == 'rice'
-                        ? 'Gạo ST25'
-                        : id == 'water'
-                            ? 'Nước khoáng Lavie'
-                            : id == 'beef'
-                                ? 'Thịt bò Mỹ'
-                                : 'Sản phẩm $id',
+            ? 'Táo Envy'
+            : id == 'eggs'
+            ? 'Trứng gà sạch'
+            : id == 'rice'
+            ? 'Gạo ST25'
+            : id == 'water'
+            ? 'Nước khoáng Lavie'
+            : id == 'beef'
+            ? 'Thịt bò Mỹ'
+            : 'Sản phẩm $id',
         price: 20000,
         rating: 5.0,
         category: 'Hàng hóa',
@@ -320,10 +321,8 @@ class StaffController extends ChangeNotifier {
     return contents.entries
         .where((entry) => entry.value > 0)
         .map(
-          (entry) => CartLine(
-            product: productById(entry.key),
-            quantity: entry.value,
-          ),
+          (entry) =>
+              CartLine(product: productById(entry.key), quantity: entry.value),
         )
         .toList(growable: false);
   }
@@ -331,20 +330,21 @@ class StaffController extends ChangeNotifier {
   /// gộp sản phẩm ở bốn tầng thành danh sách để tính tổng trên kệ.
   List<CartLine> shelfLines(String shelfCode) {
     final totals = <String, int>{};
-    for (final tier in _shelfQuantities[shelfCode]?.values ??
-        const <Map<String, int>>[]) {
+    for (final tier
+        in _shelfQuantities[shelfCode]?.values ?? const <Map<String, int>>[]) {
       for (final entry in tier.entries) {
-        totals.update(entry.key, (value) => value + entry.value,
-            ifAbsent: () => entry.value);
+        totals.update(
+          entry.key,
+          (value) => value + entry.value,
+          ifAbsent: () => entry.value,
+        );
       }
     }
     return totals.entries
         .where((entry) => entry.value > 0)
         .map(
-          (entry) => CartLine(
-            product: productById(entry.key),
-            quantity: entry.value,
-          ),
+          (entry) =>
+              CartLine(product: productById(entry.key), quantity: entry.value),
         )
         .toList(growable: false);
   }
@@ -372,7 +372,9 @@ class StaffController extends ChangeNotifier {
       final tiers = _shelfQuantities[shelf.code]!;
       for (var tier = 1; tier <= shelfTierCount; tier++) {
         if ((tiers[tier]?[productId] ?? 0) > 0) {
-          locations.add(StaffProductLocation(shelfCode: shelf.code, tier: tier));
+          locations.add(
+            StaffProductLocation(shelfCode: shelf.code, tier: tier),
+          );
         }
       }
     }
@@ -382,38 +384,37 @@ class StaffController extends ChangeNotifier {
   /// trả các dòng hàng có số lượng thấp hơn ngưỡng cảnh báo trên kệ.
   List<CartLine> lowStockLines(String shelfCode) {
     final lowStock = <String, int>{};
-    final tiers = _shelfQuantities[shelfCode] ?? const <int, Map<String, int>>{};
+    final tiers =
+        _shelfQuantities[shelfCode] ?? const <int, Map<String, int>>{};
     for (final tier in tiers.values) {
       for (final entry in tier.entries) {
         if (entry.value > 0 && entry.value < lowStockThreshold) {
-          lowStock.update(entry.key, (value) => value + entry.value,
-              ifAbsent: () => entry.value);
+          lowStock.update(
+            entry.key,
+            (value) => value + entry.value,
+            ifAbsent: () => entry.value,
+          );
         }
       }
     }
     return lowStock.entries
         .map(
-          (entry) => CartLine(
-            product: productById(entry.key),
-            quantity: entry.value,
-          ),
+          (entry) =>
+              CartLine(product: productById(entry.key), quantity: entry.value),
         )
         .toList(growable: false);
   }
 
   /// lọc lịch sử nhập kho theo mã sản phẩm.
-  List<StaffStockReceipt> receiptsForProduct(String productId) =>
-      _stockReceipts
-          .where((receipt) => receipt.productId == productId)
-          .toList(growable: false);
+  List<StaffStockReceipt> receiptsForProduct(String productId) => _stockReceipts
+      .where((receipt) => receipt.productId == productId)
+      .toList(growable: false);
 
   /// tính tỷ lệ lấp đầy của kệ so với sức chứa và giới hạn từ không đến một trăm.
   int getShelfFillPercent(String shelfCode) {
     final shelf = shelfList.firstWhere((item) => item.code == shelfCode);
-    final occupied = shelfLines(shelfCode).fold<int>(
-      0,
-      (sum, line) => sum + line.quantity,
-    );
+    final occupied = shelfLines(shelfCode)
+        .fold<int>(0, (sum, line) => sum + line.quantity);
     return (occupied * 100 / shelf.capacity).round().clamp(0, 100);
   }
 
@@ -433,9 +434,11 @@ class StaffController extends ChangeNotifier {
       ),
     );
     _intakeCount++;
-    _staffService.receiveStock(productId: product.id, quantity: quantity).catchError((e) {
-      debugPrint('Đồng bộ nhập kho lên API thất bại: $e');
-    });
+    _staffService
+        .receiveStock(productId: product.id, quantity: quantity)
+        .catchError((e) {
+          debugPrint('Đồng bộ nhập kho lên API thất bại: $e');
+        });
     notifyListeners();
   }
 
@@ -453,7 +456,8 @@ class StaffController extends ChangeNotifier {
     if (quantity > inWarehouse) {
       throw StateError('Kho chỉ còn $inWarehouse sản phẩm này.');
     }
-    final shelf = _shelfQuantities[shelfCode] ?? const <int, Map<String, int>>{};
+    final shelf =
+        _shelfQuantities[shelfCode] ?? const <int, Map<String, int>>{};
     final currentTier = shelf[tier] ?? const <String, int>{};
     final differentProduct = currentTier.entries
         .where((entry) => entry.value > 0)
@@ -470,14 +474,16 @@ class StaffController extends ChangeNotifier {
       (current) => current + quantity,
       ifAbsent: () => quantity,
     );
-    _staffService.moveToShelf(
-      shelfCode: shelfCode,
-      tier: tier,
-      productId: product.id,
-      quantity: quantity,
-    ).catchError((e) {
-      debugPrint('Đồng bộ chuyển kệ lên API thất bại: $e');
-    });
+    _staffService
+        .moveToShelf(
+          shelfCode: shelfCode,
+          tier: tier,
+          productId: product.id,
+          quantity: quantity,
+        )
+        .catchError((e) {
+          debugPrint('Đồng bộ chuyển kệ lên API thất bại: $e');
+        });
     notifyListeners();
   }
 
@@ -570,16 +576,22 @@ class StaffController extends ChangeNotifier {
     _invoiceCounter++;
     _sales.insert(0, sale);
 
-    _staffService.completeSale(
-      lines: lines.map((l) => {
-        'productId': l.product.id,
-        'quantity': l.quantity,
-        'price': l.product.price,
-      }).toList(),
-      total: sale.total,
-    ).catchError((e) {
-      debugPrint('Đồng bộ xuất hóa đơn POS lên API thất bại: $e');
-    });
+    _staffService
+        .completeSale(
+          lines: lines
+              .map(
+                (l) => {
+                  'productId': l.product.id,
+                  'quantity': l.quantity,
+                  'price': l.product.price,
+                },
+              )
+              .toList(),
+          total: sale.total,
+        )
+        .catchError((e) {
+          debugPrint('Đồng bộ xuất hóa đơn POS lên API thất bại: $e');
+        });
 
     _saleCart.clear();
     notifyListeners();

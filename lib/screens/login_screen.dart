@@ -61,7 +61,11 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Đăng nhập thất bại: ${e.toString().replaceFirst('ApiException: ', '')}')),
+        SnackBar(
+          content: Text(
+            'Đăng nhập thất bại: ${e.toString().replaceFirst('ApiException: ', '')}',
+          ),
+        ),
       );
     } finally {
       authService.dispose();
@@ -77,9 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            _LoginHero(
-              onBack: () => Navigator.of(context).maybePop(),
-            ),
+            _LoginHero(onBack: () => Navigator.of(context).maybePop()),
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 24, 22, 28),
               child: Form(
@@ -98,10 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 5),
                     const Text(
                       'Đăng nhập để tiếp tục trải nghiệm cùng SSM4',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                     const SizedBox(height: 24),
                     _LoginFieldLabel(
@@ -214,9 +213,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) => RegisterScreen(
-                              onComplete: widget.onComplete,
-                            ),
+                            builder: (_) =>
+                                RegisterScreen(onComplete: widget.onComplete),
                           ),
                         );
                       },
@@ -391,10 +389,7 @@ class _LoginFieldLabel extends StatelessWidget {
 }
 
 class _LoginSubmitButton extends StatelessWidget {
-  const _LoginSubmitButton({
-    required this.isLoading,
-    required this.onPressed,
-  });
+  const _LoginSubmitButton({required this.isLoading, required this.onPressed});
 
   final bool isLoading;
   final VoidCallback onPressed;

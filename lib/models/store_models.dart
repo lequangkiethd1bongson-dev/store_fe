@@ -21,7 +21,9 @@ enum UserRole {
 
   static UserRole fromString(String? role) {
     final clean = (role ?? '').toUpperCase();
-    if (clean.contains('STORE_MANAGER') || clean.contains('STOREMANAGER') || clean.contains('QUAN_LY_CUA_HANG')) {
+    if (clean.contains('STORE_MANAGER') ||
+        clean.contains('STOREMANAGER') ||
+        clean.contains('QUAN_LY_CUA_HANG')) {
       return UserRole.storeManager;
     }
     if (clean.contains('WAREHOUSE_MANAGER') || clean.contains('KHO_MANAGER')) {
@@ -69,7 +71,8 @@ class AppUser {
   bool get isSalesStaff => role == UserRole.salesStaff;
 
   /// kiểm tra người dùng thuộc cửa hàng (quản lý hoặc bán hàng).
-  bool get isStoreStaff => role == UserRole.storeManager || role == UserRole.salesStaff;
+  bool get isStoreStaff =>
+      role == UserRole.storeManager || role == UserRole.salesStaff;
 
   /// kiểm tra người dùng có phải nhân viên kho không.
   bool get isWarehouseStaff =>
@@ -105,14 +108,14 @@ class AppUser {
     'role': role == UserRole.storeManager
         ? 'STORE_MANAGER'
         : role == UserRole.salesStaff
-            ? 'SALES_STAFF'
-            : role == UserRole.warehouseStaff
-                ? 'WAREHOUSE_STAFF'
-                : role == UserRole.warehouseManager
-                    ? 'WAREHOUSE_MANAGER'
-                    : role == UserRole.admin
-                        ? 'ADMIN'
-                        : 'CUSTOMER',
+        ? 'SALES_STAFF'
+        : role == UserRole.warehouseStaff
+        ? 'WAREHOUSE_STAFF'
+        : role == UserRole.warehouseManager
+        ? 'WAREHOUSE_MANAGER'
+        : role == UserRole.admin
+        ? 'ADMIN'
+        : 'CUSTOMER',
   };
 }
 
