@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../core/network/api_client.dart';
 import '../models/product.dart';
@@ -991,6 +992,274 @@ class _RestockRequestCard extends StatelessWidget {
   }
 }
 
+/// Chế độ hiển thị cho Bảng sản phẩm 3 cột
+enum RestockTableMode { pending, approved, exported, scanning }
+
+/// Bảng hiển thị danh sách sản phẩm chuẩn 3 cột: Tên sản phẩm | Đơn vị tính | Số lượng
+class RestockProduct3ColumnTable extends StatelessWidget {
+  const RestockProduct3ColumnTable({
+    required this.items,
+    this.mode = RestockTableMode.approved,
+    this.scannedCounts = const {},
+    super.key,
+  });
+
+  final List<RestockRequestItem> items;
+  final RestockTableMode mode;
+  final Map<String, int> scannedCounts;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+          child: Text(
+            'Không có sản phẩm nào trong phiếu.',
+            style: TextStyle(color: AppColors.muted, fontSize: 12),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Bảng Header 3 Cột
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            color: const Color(0xFFF1F5F9),
+            child: const Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Text(
+                    'Tên sản phẩm',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.blue900,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    'Đơn vị tính',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.blue900,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 4,
+                  child: Text(
+                    'Số lượng',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.blue900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          // Danh sách các hàng sản phẩm
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            separatorBuilder: (_, _) =>
+                const Divider(height: 1, color: Color(0xFFF1F5F9)),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final targetQty = item.approvedQuantity ?? item.requestedQuantity;
+              final scanned = scannedCounts[item.productId] ?? 0;
+              final remaining = targetQty - scanned < 0
+                  ? 0
+                  : targetQty - scanned;
+
+              Color rowBg = Colors.white;
+              if (mode == RestockTableMode.scanning) {
+                if (targetQty == 0) {
+                  rowBg = Colors.grey.shade100;
+                } else if (scanned >= targetQty) {
+                  rowBg = const Color(0xFFF0FDF4);
+                } else if (scanned > 0) {
+                  rowBg = const Color(0xFFEFF6FF);
+                }
+              }
+
+              return Container(
+                color: rowBg,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Cột 1: Tên sản phẩm & Mã vạch (Căn trái, không hiển thị UUID)
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.productName ?? 'Sản phẩm ${index + 1}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink,
+                              height: 1.25,
+                            ),
+                          ),
+                          if (item.productBarcode != null &&
+                              item.productBarcode!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Mã vạch: ${item.productBarcode}',
+                              style: const TextStyle(
+                                fontSize: 9,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    // Cột 2: Đơn vị tính (Căn giữa)
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        item.displayUnit,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.ink,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    // Cột 3: Số lượng (Căn phải)
+                    Expanded(
+                      flex: 4,
+                      child: _buildQuantityColumn(
+                        item,
+                        targetQty,
+                        scanned,
+                        remaining,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuantityColumn(
+    RestockRequestItem item,
+    int targetQty,
+    int scanned,
+    int remaining,
+  ) {
+    switch (mode) {
+      case RestockTableMode.pending:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'YC: ${item.requestedQuantity}',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: AppColors.blue800,
+              ),
+            ),
+          ],
+        );
+      case RestockTableMode.approved:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'Duyệt: $targetQty',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: AppColors.blue800,
+              ),
+            ),
+            Text(
+              'YC: ${item.requestedQuantity}',
+              style: const TextStyle(fontSize: 9, color: AppColors.muted),
+            ),
+          ],
+        );
+      case RestockTableMode.exported:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'Đã xuất: $targetQty',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.green,
+              ),
+            ),
+          ],
+        );
+      case RestockTableMode.scanning:
+        final isComplete = targetQty > 0 && scanned >= targetQty;
+        final isZero = targetQty == 0;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'Đã quét: $scanned/$targetQty',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: isZero
+                    ? AppColors.muted
+                    : isComplete
+                    ? Colors.green.shade800
+                    : AppColors.blue800,
+              ),
+            ),
+            if (!isZero)
+              Text(
+                isComplete ? 'Đã đủ' : 'Thiếu: $remaining',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: isComplete ? Colors.green.shade700 : Colors.red[700],
+                ),
+              ),
+          ],
+        );
+    }
+  }
+}
+
 /// Màn hình Chi tiết Phiếu yêu cầu & Xác nhận nhận hàng (chỉ dành cho Quản lý cửa hàng - store_manager)
 class RestockRequestDetailScreen extends StatefulWidget {
   const RestockRequestDetailScreen({
@@ -1215,6 +1484,7 @@ class _RestockRequestDetailScreenState
                             style: TextStyle(
                               color: AppColors.muted,
                               fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           Container(
@@ -1238,29 +1508,31 @@ class _RestockRequestDetailScreenState
                         ],
                       ),
                       const Divider(height: 16),
-                      Text('Mã phiếu: ${req.id}'),
-                      const SizedBox(height: 4),
-                      Text('Kho nhận: ${req.warehouseName ?? req.warehouseId}'),
-                      const SizedBox(height: 4),
-                      Text('Thời gian tạo: ${_formatDate(req.createdAt)}'),
-                      if (req.createdBy != null) ...[
-                        const SizedBox(height: 4),
-                        Text('Người tạo: ${req.createdBy}'),
-                      ],
-                      if (req.approvedBy != null) ...[
-                        const SizedBox(height: 4),
-                        Text('Người xử lý: ${req.approvedBy}'),
-                      ],
-                      if (req.note != null && req.note!.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Ghi chú: ${req.note}',
-                          style: const TextStyle(
-                            fontStyle: FontStyle.italic,
-                            color: AppColors.muted,
-                          ),
+                      _buildInfoRow('Mã phiếu', req.id),
+                      _buildInfoRow(
+                        'Kho nhận',
+                        req.warehouseName ?? req.warehouseId,
+                      ),
+                      _buildInfoRow(
+                        'Thời gian tạo',
+                        _formatDate(req.createdAt),
+                      ),
+                      if (req.displayCreatedBy != null)
+                        _buildInfoRow('Người yêu cầu', req.displayCreatedBy!),
+                      if (req.displayApprovedBy != null)
+                        _buildInfoRow(
+                          'Người duyệt/xử lý',
+                          req.displayApprovedBy!,
                         ),
-                      ],
+                      if (req.displayExportedBy != null)
+                        _buildInfoRow('Người xuất kho', req.displayExportedBy!),
+                      if (req.displayReceivedBy != null)
+                        _buildInfoRow(
+                          'Người nhận hàng',
+                          req.displayReceivedBy!,
+                        ),
+                      if (req.note != null && req.note!.isNotEmpty)
+                        _buildInfoRow('Ghi chú', req.note!),
                     ],
                   ),
                 ),
@@ -1307,7 +1579,7 @@ class _RestockRequestDetailScreenState
 
               const SizedBox(height: 16),
 
-              // Danh sách sản phẩm trong phiếu
+              // Bảng 3 Cột Danh sách sản phẩm trong phiếu
               Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -1317,55 +1589,34 @@ class _RestockRequestDetailScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Danh sách sản phẩm yêu cầu',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Danh sách sản phẩm',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            '${req.items.length} mặt hàng',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
                       ),
-                      const Divider(height: 16),
-                      if (req.items.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Text('Không có chi tiết sản phẩm nào.'),
-                        )
-                      else
-                        ...req.items.map((item) {
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              item.productName ?? 'Sản phẩm ${item.productId}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Text('Mã SP: ${item.productId}'),
-                            trailing: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  'Yêu cầu: ${item.requestedQuantity}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                if (item.approvedQuantity != null)
-                                  Text(
-                                    'Kho duyệt: ${item.approvedQuantity}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.green[800],
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          );
-                        }),
+                      const SizedBox(height: 12),
+                      RestockProduct3ColumnTable(
+                        items: req.items,
+                        mode: req.isPending
+                            ? RestockTableMode.pending
+                            : req.isApproved
+                            ? RestockTableMode.approved
+                            : RestockTableMode.exported,
+                      ),
                     ],
                   ),
                 ),
@@ -1419,6 +1670,38 @@ class _RestockRequestDetailScreenState
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.muted,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2661,6 +2944,27 @@ class _WarehouseRestockRequestDetailScreenState
             onPressed: _loadDetail,
             icon: const Icon(Icons.refresh_rounded),
           ),
+          if (_request?.isApproved == true)
+            PopupMenuButton<String>(
+              tooltip: 'Tùy chọn khác',
+              onSelected: (val) {
+                if (val == 'direct_export') {
+                  _showExportDialog();
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem<String>(
+                  value: 'direct_export',
+                  child: Row(
+                    children: [
+                      Icon(Icons.unarchive_outlined, size: 18),
+                      SizedBox(width: 8),
+                      Text('Xuất kho nhanh (không quét mã)'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
       body: SafeArea(child: _buildBody()),
@@ -2717,6 +3021,7 @@ class _WarehouseRestockRequestDetailScreenState
                             style: TextStyle(
                               color: AppColors.muted,
                               fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           Container(
@@ -2740,31 +3045,35 @@ class _WarehouseRestockRequestDetailScreenState
                         ],
                       ),
                       const Divider(height: 16),
-                      Text('Mã phiếu: ${req.id}'),
-                      const SizedBox(height: 4),
-                      Text('Cửa hàng yêu cầu: ${req.storeName ?? req.storeId}'),
-                      const SizedBox(height: 4),
-                      Text('Kho nhận: ${req.warehouseName ?? req.warehouseId}'),
-                      const SizedBox(height: 4),
-                      Text('Thời gian tạo: ${_formatDate(req.createdAt)}'),
-                      if (req.createdBy != null) ...[
-                        const SizedBox(height: 4),
-                        Text('Người tạo: ${req.createdBy}'),
-                      ],
-                      if (req.approvedBy != null) ...[
-                        const SizedBox(height: 4),
-                        Text('Người duyệt/xử lý: ${req.approvedBy}'),
-                      ],
-                      if (req.note != null && req.note!.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Ghi chú cửa hàng: ${req.note}',
-                          style: const TextStyle(
-                            fontStyle: FontStyle.italic,
-                            color: AppColors.muted,
-                          ),
+                      _buildInfoRow('Mã phiếu', req.id),
+                      _buildInfoRow(
+                        'Cửa hàng yêu cầu',
+                        req.storeName ?? req.storeId,
+                      ),
+                      _buildInfoRow(
+                        'Kho nhận',
+                        req.warehouseName ?? req.warehouseId,
+                      ),
+                      _buildInfoRow(
+                        'Thời gian tạo',
+                        _formatDate(req.createdAt),
+                      ),
+                      if (req.displayCreatedBy != null)
+                        _buildInfoRow('Người yêu cầu', req.displayCreatedBy!),
+                      if (req.displayApprovedBy != null)
+                        _buildInfoRow(
+                          'Người duyệt/xử lý',
+                          req.displayApprovedBy!,
                         ),
-                      ],
+                      if (req.displayExportedBy != null)
+                        _buildInfoRow('Người xuất kho', req.displayExportedBy!),
+                      if (req.displayReceivedBy != null)
+                        _buildInfoRow(
+                          'Người nhận hàng',
+                          req.displayReceivedBy!,
+                        ),
+                      if (req.note != null && req.note!.isNotEmpty)
+                        _buildInfoRow('Ghi chú cửa hàng', req.note!),
                     ],
                   ),
                 ),
@@ -2811,7 +3120,7 @@ class _WarehouseRestockRequestDetailScreenState
 
               const SizedBox(height: 16),
 
-              // Danh sách sản phẩm trong phiếu
+              // Bảng 3 Cột Danh sách sản phẩm trong phiếu
               Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -2821,59 +3130,34 @@ class _WarehouseRestockRequestDetailScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Danh sách sản phẩm',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Danh sách sản phẩm',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            '${req.items.length} mặt hàng',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
                       ),
-                      const Divider(height: 16),
-                      if (req.items.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Text('Không có chi tiết sản phẩm nào.'),
-                        )
-                      else
-                        ...req.items.map((item) {
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              item.productName ?? 'Sản phẩm ${item.productId}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Text(
-                              'Mã SP: ${item.productId}'
-                              '${item.productBarcode != null ? ' · Mã vạch: ${item.productBarcode}' : ''}'
-                              '${item.warehouseStock != null ? '\nTồn kho hiện tại: ${item.warehouseStock}' : ''}',
-                            ),
-                            trailing: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  'Cửa hàng yêu cầu: ${item.requestedQuantity}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                if (item.approvedQuantity != null)
-                                  Text(
-                                    'Đã duyệt: ${item.approvedQuantity}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.green[800],
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          );
-                        }),
+                      const SizedBox(height: 12),
+                      RestockProduct3ColumnTable(
+                        items: req.items,
+                        mode: req.isPending
+                            ? RestockTableMode.pending
+                            : req.isApproved
+                            ? RestockTableMode.approved
+                            : RestockTableMode.exported,
+                      ),
                     ],
                   ),
                 ),
@@ -2973,27 +3257,30 @@ class _WarehouseRestockRequestDetailScreenState
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    onPressed: _isSubmitting ? null : _showExportDialog,
-                    icon: _isSubmitting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.unarchive_rounded,
-                            color: Colors.white,
-                          ),
-                    label: Text(
-                      _isSubmitting
-                          ? 'ĐANG XỬ LÝ...'
-                          : 'XUẤT KHO VÀ GỬI CỬA HÀNG',
-                      style: const TextStyle(
+                    onPressed: _isSubmitting
+                        ? null
+                        : () async {
+                            final res = await Navigator.of(context).push<bool>(
+                              MaterialPageRoute(
+                                builder: (_) => WarehouseStockExportScanScreen(
+                                  request: req,
+                                  userRole: widget.userRole,
+                                ),
+                              ),
+                            );
+                            if (res == true) {
+                              _loadDetail();
+                            }
+                          },
+                    icon: const Icon(
+                      Icons.qr_code_scanner_rounded,
+                      color: Colors.white,
+                    ),
+                    label: const Text(
+                      'CHUẨN BỊ HÀNG & QUÉT MÃ',
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -3006,11 +3293,664 @@ class _WarehouseRestockRequestDetailScreenState
     );
   }
 
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.muted,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatDate(DateTime dt) {
     final d = dt.day.toString().padLeft(2, '0');
     final m = dt.month.toString().padLeft(2, '0');
     final h = dt.hour.toString().padLeft(2, '0');
     final min = dt.minute.toString().padLeft(2, '0');
     return '$d/$m/${dt.year} $h:$min';
+  }
+}
+
+/// Màn hình Quét mã vạch kiểm tra sản phẩm trước khi xuất kho (dành cho kho_manager)
+class WarehouseStockExportScanScreen extends StatefulWidget {
+  const WarehouseStockExportScanScreen({
+    required this.request,
+    required this.userRole,
+    super.key,
+  });
+
+  final RestockRequest request;
+  final String userRole;
+
+  @override
+  State<WarehouseStockExportScanScreen> createState() =>
+      _WarehouseStockExportScanScreenState();
+}
+
+class _WarehouseStockExportScanScreenState
+    extends State<WarehouseStockExportScanScreen> {
+  final _restockService = RestockService();
+  late final MobileScannerController _cameraController =
+      MobileScannerController(
+        detectionSpeed: DetectionSpeed.noDuplicates,
+        formats: const [
+          BarcodeFormat.ean13,
+          BarcodeFormat.ean8,
+          BarcodeFormat.upcA,
+          BarcodeFormat.upcE,
+          BarcodeFormat.code128,
+          BarcodeFormat.code39,
+          BarcodeFormat.qrCode,
+        ],
+      );
+
+  final _textController = TextEditingController();
+  final Map<String, int> _scannedCounts = {};
+  bool _isProcessingScan = false;
+  bool _isSubmitting = false;
+
+  String? _feedbackMessage;
+  bool _feedbackIsError = false;
+
+  bool get _isWarehouseManager => isWarehouseManagerRole(widget.userRole);
+
+  @override
+  void initState() {
+    super.initState();
+    for (final item in widget.request.items) {
+      _scannedCounts[item.productId] = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _cameraController.dispose();
+    _textController.dispose();
+    _restockService.dispose();
+    super.dispose();
+  }
+
+  int get _totalTargetCount {
+    return widget.request.items.fold<int>(0, (sum, item) {
+      final target = item.approvedQuantity ?? item.requestedQuantity;
+      return sum + target;
+    });
+  }
+
+  int get _totalScannedCount {
+    return _scannedCounts.values.fold<int>(0, (sum, val) => sum + val);
+  }
+
+  bool get _isAllScanned {
+    for (final item in widget.request.items) {
+      final target = item.approvedQuantity ?? item.requestedQuantity;
+      if (target > 0) {
+        final scanned = _scannedCounts[item.productId] ?? 0;
+        if (scanned < target) return false;
+      }
+    }
+    return true;
+  }
+
+  void _onDetectBarcode(BarcodeCapture capture) {
+    if (_isProcessingScan) return;
+    for (final barcode in capture.barcodes) {
+      final val = barcode.rawValue;
+      if (val != null && val.trim().isNotEmpty) {
+        _handleScannedBarcode(val.trim());
+        return;
+      }
+    }
+  }
+
+  Future<void> _handleScannedBarcode(String code) async {
+    if (_isProcessingScan) return;
+    _isProcessingScan = true;
+
+    RestockRequestItem? matchedItem;
+    for (final item in widget.request.items) {
+      if (item.productBarcode != null && item.productBarcode!.trim() == code) {
+        matchedItem = item;
+        break;
+      }
+      if (item.productId == code) {
+        matchedItem = item;
+        break;
+      }
+    }
+
+    if (matchedItem == null) {
+      _showFeedback(
+        '❌ Mã vạch $code không thuộc sản phẩm nào trong phiếu này.',
+        isError: true,
+      );
+      _unlockScanAfterDelay();
+      return;
+    }
+
+    final target =
+        matchedItem.approvedQuantity ?? matchedItem.requestedQuantity;
+    if (target == 0) {
+      _showFeedback(
+        '⚠️ Sản phẩm ${matchedItem.productName ?? matchedItem.productId} có số lượng duyệt bằng 0, không được xuất.',
+        isError: true,
+      );
+      _unlockScanAfterDelay();
+      return;
+    }
+
+    final currentScanned = _scannedCounts[matchedItem.productId] ?? 0;
+    if (currentScanned >= target) {
+      _showFeedback(
+        '⚠️ Sản phẩm ${matchedItem.productName ?? matchedItem.productId} đã quét đủ số lượng ($currentScanned/$target).',
+        isError: true,
+      );
+      _unlockScanAfterDelay();
+      return;
+    }
+
+    setState(() {
+      _scannedCounts[matchedItem!.productId] = currentScanned + 1;
+    });
+
+    final newCount = currentScanned + 1;
+    final remaining = target - newCount;
+
+    _showFeedback(
+      '✅ ${matchedItem.productName ?? matchedItem.productId} (${matchedItem.displayUnit}) • Đã quét: $newCount/$target • Còn thiếu: $remaining',
+      isError: false,
+    );
+
+    _unlockScanAfterDelay();
+  }
+
+  void _unlockScanAfterDelay() {
+    Future.delayed(const Duration(milliseconds: 1300), () {
+      if (mounted) {
+        _isProcessingScan = false;
+      }
+    });
+  }
+
+  void _showFeedback(String msg, {required bool isError}) {
+    if (!mounted) return;
+    setState(() {
+      _feedbackMessage = msg;
+      _feedbackIsError = isError;
+    });
+  }
+
+  Future<void> _submitExport() async {
+    if (!_isAllScanned) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chưa quét đủ toàn bộ sản phẩm trong phiếu xuất!'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Xác nhận xuất kho'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Tất cả sản phẩm đã được kiểm tra đủ 100%. Bạn có chắc chắn muốn xác nhận xuất kho?',
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '• Phiếu ID: ${widget.request.id}\n'
+              '• Cửa hàng: ${widget.request.storeName ?? widget.request.storeId}\n'
+              '• Số mặt hàng: ${widget.request.items.length}\n'
+              '• Số lượng kiểm tra: $_totalScannedCount SP',
+              style: const TextStyle(fontSize: 11, color: AppColors.muted),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.blue700),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.check_circle_rounded, color: Colors.white),
+            label: const Text(
+              'XÁC NHẬN XUẤT KHO',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isSubmitting = true);
+
+    final scannedPayload = widget.request.items.map((item) {
+      final qty = _scannedCounts[item.productId] ?? 0;
+      return {
+        'productId': item.productId,
+        'barcode': item.productBarcode ?? '',
+        'scannedQuantity': qty,
+        'quantity': qty,
+      };
+    }).toList();
+
+    try {
+      await _restockService.exportRequest(
+        requestId: widget.request.id,
+        scannedItems: scannedPayload,
+      );
+
+      if (!mounted || !context.mounted) return;
+      setState(() => _isSubmitting = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Đã kiểm tra & xuất kho thành công! Trạng thái chuyển sang Đang vận chuyển.',
+          ),
+          backgroundColor: Colors.green[700],
+        ),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted || !context.mounted) return;
+      setState(() => _isSubmitting = false);
+      final formattedError = formatRestockApiError(e);
+
+      if (e is ApiException && e.statusCode == 409) {
+        showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(Icons.error_outline, color: Colors.red, size: 44),
+            title: const Text('Xuất kho thất bại (409)'),
+            content: Text(formattedError),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Đóng'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không thể xuất kho: $formattedError'),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isWarehouseManager) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Quét mã xuất kho')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.gpp_bad_rounded, size: 64, color: Colors.red),
+                SizedBox(height: 16),
+                Text(
+                  'Truy cập bị từ chối',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Role nhân viên kho không được thực hiện quét mã xuất kho.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!widget.request.isApproved) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Quét mã xuất kho')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.info_outline, size: 64, color: Colors.orange),
+                const SizedBox(height: 16),
+                const Text(
+                  'Phiếu không ở trạng thái Đã duyệt',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Chỉ các phiếu ở trạng thái Đã duyệt mới được phép quét mã kiểm tra xuất kho. Trạng thái hiện tại: ${widget.request.statusDisplay}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.muted),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Quay lại'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final progressPercent = _totalTargetCount > 0
+        ? (_totalScannedCount / _totalTargetCount).clamp(0.0, 1.0)
+        : 0.0;
+
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        title: Text(
+          'Quét xuất kho · ${widget.request.id.length > 8 ? widget.request.id.substring(0, 8) : widget.request.id}',
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Bật/tắt đèn Flash',
+            onPressed: _cameraController.toggleTorch,
+            icon: const Icon(Icons.flashlight_on_outlined),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Khung camera quét mã
+            SizedBox(
+              height: 180,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  MobileScanner(
+                    controller: _cameraController,
+                    onDetect: _onDetectBarcode,
+                    errorBuilder: (context, error) => ColoredBox(
+                      color: AppColors.ink,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'Không thể mở camera: ${error.errorCode.name}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  IgnorePointer(
+                    child: Center(
+                      child: Container(
+                        width: 240,
+                        height: 110,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.white, width: 3),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Positioned(
+                    bottom: 8,
+                    left: 16,
+                    right: 16,
+                    child: Text(
+                      'Đưa mã vạch sản phẩm vào khung để kiểm tra',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                        shadows: [Shadow(blurRadius: 6, color: Colors.black)],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Banner thông báo kết quả quét gần nhất
+            if (_feedbackMessage != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                color: _feedbackIsError
+                    ? Colors.red.shade100
+                    : Colors.green.shade100,
+                child: Text(
+                  _feedbackMessage!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: _feedbackIsError
+                        ? Colors.red.shade900
+                        : Colors.green.shade900,
+                  ),
+                ),
+              ),
+
+            // Card Tổng quan tiến độ
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+              child: Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Cửa hàng: ${widget.request.storeName ?? widget.request.storeId}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            '$_totalScannedCount/$_totalTargetCount SP',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: _isAllScanned
+                                  ? Colors.green.shade800
+                                  : AppColors.blue800,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: progressPercent,
+                          minHeight: 8,
+                          backgroundColor: Colors.grey.shade200,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            _isAllScanned ? Colors.green : AppColors.blue700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Ô nhập mã thủ công nếu camera không quét được
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _textController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        hintText: 'Nhập tay mã vạch nếu cần',
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      onSubmitted: (val) {
+                        if (val.trim().isNotEmpty) {
+                          _handleScannedBarcode(val.trim());
+                          _textController.clear();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
+                    onPressed: () {
+                      final val = _textController.text.trim();
+                      if (val.isNotEmpty) {
+                        _handleScannedBarcode(val);
+                        _textController.clear();
+                      }
+                    },
+                    child: const Text('Nhập'),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Bảng danh sách 3 cột hiển thị tiến độ từng mặt hàng
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: RestockProduct3ColumnTable(
+                  items: widget.request.items,
+                  mode: RestockTableMode.scanning,
+                  scannedCounts: _scannedCounts,
+                ),
+              ),
+            ),
+
+            // Thanh xác nhận xuất kho
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: AppColors.line)),
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isAllScanned
+                        ? Colors.green[700]
+                        : Colors.grey[400],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: (_isAllScanned && !_isSubmitting)
+                      ? _submitExport
+                      : null,
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Icon(
+                          _isAllScanned
+                              ? Icons.check_circle_rounded
+                              : Icons.lock_outline_rounded,
+                          color: Colors.white,
+                        ),
+                  label: Text(
+                    _isSubmitting
+                        ? 'ĐANG GỬI XUẤT KHO...'
+                        : _isAllScanned
+                        ? 'XÁC NHẬN XUẤT KHO (ĐÃ KIỂM TRẢ ĐỦ)'
+                        : 'CHƯA QUÉT ĐỦ HÀNG (CÒN THIẾU ${_totalTargetCount - _totalScannedCount} SP)',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

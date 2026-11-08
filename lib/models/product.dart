@@ -13,6 +13,8 @@ class Product {
     this.packageSize,
     this.description,
     this.stock = 24,
+    this.supplierId,
+    this.isActive = true,
   });
 
   final String id;
@@ -34,6 +36,12 @@ class Product {
 
   /// số lượng còn bán được (tương ứng `quantity`).
   final int stock;
+
+  /// ID nhà cung cấp liên kết (nếu có).
+  final String? supplierId;
+
+  /// Trạng thái hoạt động của sản phẩm.
+  final bool isActive;
 
   /// tính phần trăm giảm giá nếu giá cũ lớn hơn giá hiện tại.
   int? get discountPercent {
@@ -73,6 +81,8 @@ class Product {
             ]),
           ) ??
           0,
+      supplierId: _pickSupplierId(json),
+      isActive: _toBool(json['isActive'] ?? json['is_active'] ?? json['active']) ?? true,
     );
   }
 
@@ -91,7 +101,28 @@ class Product {
     'packageSize': packageSize,
     'description': description,
     'stock': stock,
+    if (supplierId != null) 'supplierId': supplierId,
+    'isActive': isActive,
   };
+
+  static String? _pickSupplierId(Map<String, dynamic> json) {
+    final direct = _pick(json, ['supplierId', 'supplier_id']);
+    if (direct != null && direct.toString().trim().isNotEmpty) {
+      return direct.toString().trim();
+    }
+    if (json['supplier'] is Map) {
+      final sMap = json['supplier'] as Map;
+      return (sMap['id'] ?? sMap['supplierId'] ?? sMap['supplier_id'])?.toString();
+    }
+    return null;
+  }
+
+  static bool? _toBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    final str = value.toString().trim().toLowerCase();
+    return str == 'true' || str == '1' || str == 'active';
+  }
 
   /// lấy giá trị đầu tiên khác null theo danh sách tên trường.
   static dynamic _pick(Map<String, dynamic> json, List<String> keys) {

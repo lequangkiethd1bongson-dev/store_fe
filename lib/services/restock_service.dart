@@ -175,10 +175,21 @@ class RestockService {
     return getWarehouseRequestById(requestId);
   }
 
-  /// POST /warehouse/restock-requests/{id}/export — Xuất kho gửi cửa hàng.
-  Future<RestockRequest> exportRequest({required String requestId}) async {
+  /// POST /warehouse/restock-requests/{id}/export — Xuất kho gửi cửa hàng kèm danh sách mã vạch & số lượng đã quét.
+  Future<RestockRequest> exportRequest({
+    required String requestId,
+    List<Map<String, dynamic>>? scannedItems,
+  }) async {
+    final body = scannedItems != null && scannedItems.isNotEmpty
+        ? <String, dynamic>{
+            'items': scannedItems,
+            'barcodes': scannedItems,
+          }
+        : null;
+
     final data = await _apiClient.post(
       ApiConstants.exportWarehouseRestockRequest(requestId),
+      body: body,
     );
 
     if (data is Map) {

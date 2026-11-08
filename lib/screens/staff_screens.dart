@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'kho_addproduct.dart';
 import 'kho_editproduct.dart';
+import 'goods_receipt_screens.dart';
 import 'restock_screens.dart';
 
 /// cung cấp không gian làm việc riêng cho các thao tác của nhân viên.
@@ -323,77 +324,77 @@ class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
 
     final pages = _isWarehouseManager
         ? [
-            _StaffInventoryScreen(
-              controller: widget.controller,
-              userRole: widget.userRole,
-            ),
-            WarehouseRestockRequestsScreen(userRole: widget.userRole),
-            _StaffAttendanceScreen(
-              staffName: widget.staffName,
-              roleTitle: roleTitle,
-            ),
-            _StaffProfileScreen(
-              staffName: widget.staffName,
-              roleTitle: roleTitle,
-              onLogout: widget.onExit,
-            ),
-          ]
+      _StaffInventoryScreen(
+        controller: widget.controller,
+        userRole: widget.userRole,
+      ),
+      WarehouseRestockRequestsScreen(userRole: widget.userRole),
+      _StaffAttendanceScreen(
+        staffName: widget.staffName,
+        roleTitle: roleTitle,
+      ),
+      _StaffProfileScreen(
+        staffName: widget.staffName,
+        roleTitle: roleTitle,
+        onLogout: widget.onExit,
+      ),
+    ]
         : [
-            _StaffInventoryScreen(
-              controller: widget.controller,
-              userRole: widget.userRole,
-            ),
-            _StaffAttendanceScreen(
-              staffName: widget.staffName,
-              roleTitle: roleTitle,
-            ),
-            _StaffProfileScreen(
-              staffName: widget.staffName,
-              roleTitle: roleTitle,
-              onLogout: widget.onExit,
-            ),
-          ];
+      _StaffInventoryScreen(
+        controller: widget.controller,
+        userRole: widget.userRole,
+      ),
+      _StaffAttendanceScreen(
+        staffName: widget.staffName,
+        roleTitle: roleTitle,
+      ),
+      _StaffProfileScreen(
+        staffName: widget.staffName,
+        roleTitle: roleTitle,
+        onLogout: widget.onExit,
+      ),
+    ];
 
     final destinations = _isWarehouseManager
         ? const [
-            NavigationDestination(
-              icon: Icon(Icons.inventory_2_outlined),
-              selectedIcon: Icon(Icons.inventory_2_rounded),
-              label: 'Kho hàng',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.assignment_outlined),
-              selectedIcon: Icon(Icons.assignment_rounded),
-              label: 'Phiếu yêu cầu',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.schedule_outlined),
-              selectedIcon: Icon(Icons.schedule_rounded),
-              label: 'Chấm công',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline_rounded),
-              selectedIcon: Icon(Icons.person_rounded),
-              label: 'Tài khoản',
-            ),
-          ]
+      NavigationDestination(
+        icon: Icon(Icons.inventory_2_outlined),
+        selectedIcon: Icon(Icons.inventory_2_rounded),
+        label: 'Kho hàng',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.assignment_outlined),
+        selectedIcon: Icon(Icons.assignment_rounded),
+        label: 'Phiếu yêu cầu',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.schedule_outlined),
+        selectedIcon: Icon(Icons.schedule_rounded),
+        label: 'Chấm công',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.person_outline_rounded),
+        selectedIcon: Icon(Icons.person_rounded),
+        label: 'Tài khoản',
+      ),
+    ]
         : const [
-            NavigationDestination(
-              icon: Icon(Icons.inventory_2_outlined),
-              selectedIcon: Icon(Icons.inventory_2_rounded),
-              label: 'Kho hàng',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.schedule_outlined),
-              selectedIcon: Icon(Icons.schedule_rounded),
-              label: 'Chấm công',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline_rounded),
-              selectedIcon: Icon(Icons.person_rounded),
-              label: 'Tài khoản',
-            ),
-          ];
+      NavigationDestination(
+        icon: Icon(Icons.inventory_2_outlined),
+        selectedIcon: Icon(Icons.inventory_2_rounded),
+        label: 'Kho hàng',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.schedule_outlined),
+        selectedIcon: Icon(Icons.schedule_rounded),
+        label: 'Chấm công',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.person_outline_rounded),
+        selectedIcon: Icon(Icons.person_rounded),
+        label: 'Tài khoản',
+      ),
+    ];
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -468,12 +469,12 @@ class _StaffDashboardState extends State<_StaffDashboard> {
         final matchingProducts = _searchText.trim().isEmpty
             ? const <Product>[]
             : controller.products
-                  .where(
-                    (product) => product.name.toLowerCase().contains(
-                      _searchText.trim().toLowerCase(),
-                    ),
-                  )
-                  .toList(growable: false);
+            .where(
+              (product) => product.name.toLowerCase().contains(
+            _searchText.trim().toLowerCase(),
+          ),
+        )
+            .toList(growable: false);
         return ListView(
           key: const ValueKey('staff-dashboard'),
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -620,14 +621,14 @@ class _StaffDashboardState extends State<_StaffDashboard> {
                     onTap: location == null
                         ? null
                         : () => _openShelf(
-                            context,
-                            controller,
-                            StaffController.shelfList.firstWhere(
-                              (shelf) => shelf.code == location.shelfCode,
-                            ),
-                            highlightProductId: product.id,
-                            highlightTier: location.tier,
-                          ),
+                      context,
+                      controller,
+                      StaffController.shelfList.firstWhere(
+                            (shelf) => shelf.code == location.shelfCode,
+                      ),
+                      highlightProductId: product.id,
+                      highlightTier: location.tier,
+                    ),
                   ),
                 );
               }),
@@ -926,12 +927,12 @@ class _LegendDot extends StatelessWidget {
 
 /// mở trang chi tiết cho kệ được nhân viên chọn.
 Future<void> _openShelf(
-  BuildContext context,
-  StaffController controller,
-  StaffShelf shelf, {
-  String? highlightProductId,
-  int? highlightTier,
-}) => Navigator.of(context).push<void>(
+    BuildContext context,
+    StaffController controller,
+    StaffShelf shelf, {
+      String? highlightProductId,
+      int? highlightTier,
+    }) => Navigator.of(context).push<void>(
   MaterialPageRoute<void>(
     builder: (_) => StaffShelfDetailScreen(
       controller: controller,
@@ -1255,58 +1256,58 @@ class _ShelfProductRow extends StatelessWidget {
           Expanded(
             child: line == null
                 ? const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Kệ trống',
-                        style: TextStyle(
-                          color: AppColors.muted,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Quét sản phẩm để xếp hàng vào tầng này',
-                        style: TextStyle(color: AppColors.muted, fontSize: 8),
-                      ),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        line!.product.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${line!.product.packageSize ?? 'Chưa rõ quy cách'} · ${line!.product.brand ?? 'Chưa có thương hiệu'}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.muted,
-                          fontSize: 8,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Còn lại: ${line!.quantity} sản phẩm',
-                        style: TextStyle(
-                          color: hasLowStock
-                              ? const Color(0xFFD83D4D)
-                              : AppColors.blue700,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Kệ trống',
+                  style: TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
                   ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Quét sản phẩm để xếp hàng vào tầng này',
+                  style: TextStyle(color: AppColors.muted, fontSize: 8),
+                ),
+              ],
+            )
+                : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  line!.product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${line!.product.packageSize ?? 'Chưa rõ quy cách'} · ${line!.product.brand ?? 'Chưa có thương hiệu'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 8,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Còn lại: ${line!.quantity} sản phẩm',
+                  style: TextStyle(
+                    color: hasLowStock
+                        ? const Color(0xFFD83D4D)
+                        : AppColors.blue700,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
@@ -1446,7 +1447,7 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
 
         final totalQuantityOnShelf = _storeStockItems.fold<int>(
           0,
-          (sum, item) => sum + item.quantity,
+              (sum, item) => sum + item.quantity,
         );
 
         return RefreshIndicator(
@@ -1655,22 +1656,22 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
                   ),
                 )
               else if (itemsToDisplay.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 36),
-                  child: Center(
-                    child: Text(
-                      'Cửa hàng chưa có sản phẩm nào.',
-                      style: TextStyle(color: AppColors.muted),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 36),
+                    child: Center(
+                      child: Text(
+                        'Cửa hàng chưa có sản phẩm nào.',
+                        style: TextStyle(color: AppColors.muted),
+                      ),
+                    ),
+                  )
+                else
+                  ...itemsToDisplay.map(
+                        (item) => _StoreStockProductCard(
+                      key: ValueKey('store-product-${item.product.id}'),
+                      item: item,
                     ),
                   ),
-                )
-              else
-                ...itemsToDisplay.map(
-                  (item) => _StoreStockProductCard(
-                    key: ValueKey('store-product-${item.product.id}'),
-                    item: item,
-                  ),
-                ),
             ],
           ),
         );
@@ -1833,15 +1834,65 @@ class _StaffInventoryScreenState extends State<_StaffInventoryScreen> {
         final products = controller.products
             .where(
               (product) =>
-                  product.name.toLowerCase().contains(query) ||
-                  product.category.toLowerCase().contains(query) ||
-                  (product.brand?.toLowerCase().contains(query) ?? false),
-            )
+          product.name.toLowerCase().contains(query) ||
+              product.category.toLowerCase().contains(query) ||
+              (product.brand?.toLowerCase().contains(query) ?? false),
+        )
             .toList(growable: false);
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             _InventorySummary(controller: controller),
+            const SizedBox(height: 14),
+
+            // Mục "Nhập hàng từ nhà cung cấp" dành cho Nhân viên Kho & Quản lý kho
+            Card(
+              color: const Color(0xFFF0FDF4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFFBBF7D0)),
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                leading: const CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Color(0xFF15803D),
+                  child: Icon(
+                    Icons.inventory_2_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Nhập hàng từ nhà cung cấp',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF14532D),
+                  ),
+                ),
+                subtitle: const Text(
+                  'Lập phiếu nhập, theo dõi và quản lý hàng nhập từ nhà cung cấp',
+                  style: TextStyle(fontSize: 10, color: AppColors.muted),
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF15803D),
+                ),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => GoodsReceiptsScreen(
+                        userRole: widget.userRole,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
             const SizedBox(height: 14),
 
             // CHỈ HIỂN THỊ mục "Phiếu yêu cầu từ cửa hàng" nếu role là kho_manager / WAREHOUSE_MANAGER
@@ -1955,7 +2006,7 @@ class _StaffInventoryScreenState extends State<_StaffInventoryScreen> {
             ),
             const SizedBox(height: 10),
             ...products.map(
-              (product) => _InventoryProductCard(
+                  (product) => _InventoryProductCard(
                 key: ValueKey('inventory-product-${product.id}'),
                 controller: controller,
                 product: product,
@@ -2117,10 +2168,10 @@ class _InventoryProductCard extends StatelessWidget {
 
 /// mở thông tin cơ bản và lịch sử ngày nhập của sản phẩm trong kho.
 Future<void> _showInventoryProductDetails(
-  BuildContext context,
-  StaffController controller,
-  Product product,
-) async {
+    BuildContext context,
+    StaffController controller,
+    Product product,
+    ) async {
   final receipts = controller.receiptsForProduct(product.id).reversed.toList();
   await showModalBottomSheet<void>(
     context: context,
@@ -2162,7 +2213,7 @@ Future<void> _showInventoryProductDetails(
               )
             else
               ...receipts.map(
-                (receipt) => ListTile(
+                    (receipt) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(
                     Icons.event_available_outlined,
@@ -2335,7 +2386,7 @@ class _StaffSalesScreen extends StatelessWidget {
                     )
                   else
                     ...lines.map(
-                      (line) => _SaleLine(
+                          (line) => _SaleLine(
                         key: ValueKey('sale-line-${line.product.id}'),
                         line: line,
                         onRemove: () =>
@@ -2995,7 +3046,7 @@ class _StaffAttendanceScreenState extends State<_StaffAttendanceScreen> {
         const SizedBox(height: 10),
 
         ..._history.map(
-          (item) => Card(
+              (item) => Card(
             margin: const EdgeInsets.only(bottom: 10),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -3501,9 +3552,9 @@ class _ProfileInfoTile extends StatelessWidget {
 
 /// mở giao diện camera quét mã và trả về sản phẩm nhận diện được.
 Future<Product?> _showBarcodeScanner(
-  BuildContext context,
-  StaffController controller,
-) => Navigator.of(context).push<Product>(
+    BuildContext context,
+    StaffController controller,
+    ) => Navigator.of(context).push<Product>(
   MaterialPageRoute<Product>(
     builder: (_) => _BarcodeScannerScreen(controller: controller),
   ),
@@ -3520,18 +3571,18 @@ class _BarcodeScannerScreen extends StatefulWidget {
 
 class _BarcodeScannerScreenState extends State<_BarcodeScannerScreen> {
   late final MobileScannerController _cameraController =
-      MobileScannerController(
-        detectionSpeed: DetectionSpeed.noDuplicates,
-        formats: const [
-          BarcodeFormat.ean13,
-          BarcodeFormat.ean8,
-          BarcodeFormat.upcA,
-          BarcodeFormat.upcE,
-          BarcodeFormat.code128,
-          BarcodeFormat.code39,
-          BarcodeFormat.qrCode,
-        ],
-      );
+  MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    formats: const [
+      BarcodeFormat.ean13,
+      BarcodeFormat.ean8,
+      BarcodeFormat.upcA,
+      BarcodeFormat.upcE,
+      BarcodeFormat.code128,
+      BarcodeFormat.code39,
+      BarcodeFormat.qrCode,
+    ],
+  );
   final _textController = TextEditingController();
   String? _errorMessage;
   bool _hasResolvedCode = false;
@@ -3669,8 +3720,8 @@ class _BarcodeScannerScreenState extends State<_BarcodeScannerScreen> {
     final product = widget.controller.productFromBarcode(barcode);
     if (product == null) {
       setState(
-        () => _errorMessage =
-            'Chưa tìm thấy sản phẩm gắn với mã ${barcode.trim()}.',
+            () => _errorMessage =
+        'Chưa tìm thấy sản phẩm gắn với mã ${barcode.trim()}.',
       );
       return;
     }
@@ -3682,11 +3733,11 @@ class _BarcodeScannerScreenState extends State<_BarcodeScannerScreen> {
 
 /// hỏi số lượng sản phẩm và trả về giá trị đã xác nhận.
 Future<int?> _askQuantity(
-  BuildContext context, {
-  required String title,
-  Product? product,
-  int initial = 1,
-}) async {
+    BuildContext context, {
+      required String title,
+      Product? product,
+      int initial = 1,
+    }) async {
   var quantityText = '$initial';
   return showDialog<int>(
     context: context,
@@ -3744,9 +3795,9 @@ Future<int?> _askQuantity(
 
 /// chạy luồng quét mẫu, nhập số lượng rồi cộng hàng vào kho.
 Future<void> _receiveStock(
-  BuildContext context,
-  StaffController controller,
-) async {
+    BuildContext context,
+    StaffController controller,
+    ) async {
   final product = await _showBarcodeScanner(context, controller);
   if (product == null || !context.mounted) return;
   final quantity = await _askQuantity(
@@ -3765,11 +3816,11 @@ Future<void> _receiveStock(
 
 /// quét mã sản phẩm rồi chuyển số lượng nhập tay lên tầng kệ đã chọn.
 Future<void> _moveStockToShelf(
-  BuildContext context,
-  StaffController controller,
-  StaffShelf shelf,
-  int tier,
-) async {
+    BuildContext context,
+    StaffController controller,
+    StaffShelf shelf,
+    int tier,
+    ) async {
   final product = await _showBarcodeScanner(context, controller);
   if (product == null || !context.mounted) return;
   final quantity = await _askQuantity(
@@ -3801,11 +3852,11 @@ Future<void> _moveStockToShelf(
 
 /// mở cảnh báo chi tiết cho sản phẩm sắp hết ở tầng được chọn.
 void _showLowStockDetails(
-  BuildContext context,
-  StaffShelf shelf,
-  int tier,
-  CartLine line,
-) {
+    BuildContext context,
+    StaffShelf shelf,
+    int tier,
+    CartLine line,
+    ) {
   showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
@@ -3813,7 +3864,7 @@ void _showLowStockDetails(
       title: Text('Sắp hết hàng · tầng $tier'),
       content: Text(
         '${line.product.name} (${line.product.packageSize ?? 'chưa rõ quy cách'}) '
-        'còn ${line.quantity} sản phẩm trên kệ ${shelf.code}.',
+            'còn ${line.quantity} sản phẩm trên kệ ${shelf.code}.',
       ),
       actions: [
         TextButton(
@@ -3827,9 +3878,9 @@ void _showLowStockDetails(
 
 /// quét sản phẩm và thêm một đơn vị vào hóa đơn nháp.
 Future<void> _scanSaleProduct(
-  BuildContext context,
-  StaffController controller,
-) async {
+    BuildContext context,
+    StaffController controller,
+    ) async {
   final product = await _showBarcodeScanner(context, controller);
   if (product == null || !context.mounted) return;
   try {
@@ -3850,10 +3901,10 @@ Future<void> _scanSaleProduct(
 
 /// tăng số lượng một dòng hóa đơn nếu lượng hàng trên kệ cho phép.
 Future<void> _incrementSaleLine(
-  BuildContext context,
-  StaffController controller,
-  CartLine line,
-) async {
+    BuildContext context,
+    StaffController controller,
+    CartLine line,
+    ) async {
   try {
     controller.setSaleQuantity(line.product, line.quantity + 1);
   } on StateError catch (error) {
@@ -3867,9 +3918,9 @@ Future<void> _incrementSaleLine(
 
 /// hoàn tất việc bán hàng rồi mở bản xem trước hóa đơn.
 Future<void> _completeAndPreview(
-  BuildContext context,
-  StaffController controller,
-) async {
+    BuildContext context,
+    StaffController controller,
+    ) async {
   late final StaffSale sale;
   try {
     sale = controller.completeSale();
@@ -3914,7 +3965,7 @@ class _InvoiceDialog extends StatelessWidget {
               ),
               const Divider(height: 20),
               ...sale.lines.map(
-                (line) => Padding(
+                    (line) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [

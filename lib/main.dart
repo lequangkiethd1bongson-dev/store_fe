@@ -13,6 +13,7 @@ import 'data/sample_data.dart';
 import 'models/store_models.dart';
 import 'screens/cart_checkout_screens.dart';
 import 'screens/catalog_screens.dart';
+import 'screens/goods_receipt_screens.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/profile_order_screens.dart';
@@ -132,9 +133,7 @@ class _SmartMartAppState extends State<SmartMartApp> {
         onExit: () => _updateSession(null, null),
       );
     } else if (_userRole == 'ADMIN') {
-      // Không điều hướng Admin vào giao diện khách hàng.
-      // Thay màn hình thông báo này bằng widget quản trị thực tế khi đã có.
-      homeWidget = _AdminRouteGuardScreen(
+      homeWidget = AdminWorkspaceScreen(
         userName: _userName,
         userEmail: _userEmail,
         onLogout: () => _updateSession(null, null),
@@ -330,13 +329,13 @@ class _SmartMartAppState extends State<SmartMartApp> {
   }
 }
 
-/// Guard tạm cho role ADMIN: không để tài khoản quản trị rơi vào giao diện khách hàng.
-/// Thay bằng màn hình quản trị/cấp quyền thực tế khi widget Admin đã có trong dự án.
-class _AdminRouteGuardScreen extends StatelessWidget {
-  const _AdminRouteGuardScreen({
+/// Màn hình Không gian làm việc Quản trị viên (Admin Workspace)
+class AdminWorkspaceScreen extends StatelessWidget {
+  const AdminWorkspaceScreen({
     required this.userName,
     required this.userEmail,
     required this.onLogout,
+    super.key,
   });
 
   final String userName;
@@ -348,7 +347,7 @@ class _AdminRouteGuardScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.canvas,
       appBar: AppBar(
-        title: const Text('Quản trị viên SSM4'),
+        title: const Text('Quản trị viên hệ thống'),
         actions: [
           IconButton(
             tooltip: 'Đăng xuất',
@@ -357,55 +356,215 @@ class _AdminRouteGuardScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.admin_panel_settings_outlined,
-                      size: 56,
-                      color: AppColors.blue700,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.blue900, AppColors.blue700],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.blue900.withValues(alpha: 0.18),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    child: const Icon(
+                      Icons.admin_panel_settings_rounded,
+                      color: Colors.white,
+                      size: 32,
                     ),
-                    const SizedBox(height: 16),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'QUẢN TRỊ VIÊN (ADMIN)',
+                          style: TextStyle(
+                            color: Color(0xFFCBE4FF),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          userName.isNotEmpty ? userName : 'Quản trị viên',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          userEmail,
+                          style: const TextStyle(
+                            color: Color(0xFFDCEBFA),
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Chức năng quản trị',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            _AdminActionCard(
+              icon: Icons.business_rounded,
+              title: 'Quản lý Nhà cung cấp',
+              subtitle: 'Xem danh sách, tìm kiếm và thêm nhà cung cấp mới',
+              tint: const Color(0xFFEFF6FF),
+              iconColor: AppColors.blue700,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SupplierManagementScreen(
+                      userRole: 'ADMIN',
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            _AdminActionCard(
+              icon: Icons.inventory_2_rounded,
+              title: 'Nhập hàng từ Nhà cung cấp',
+              subtitle: 'Xem tất cả phiếu nhập toàn hệ thống, theo dõi tiến độ',
+              tint: const Color(0xFFF0FDF4),
+              iconColor: const Color(0xFF15803D),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const GoodsReceiptsScreen(
+                      userRole: 'ADMIN',
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            _AdminActionCard(
+              icon: Icons.add_circle_outline_rounded,
+              title: 'Tạo phiếu nhập kho mới',
+              subtitle: 'Lập phiếu nhập hàng từ nhà cung cấp vào kho được chọn',
+              tint: const Color(0xFFFFFBEB),
+              iconColor: const Color(0xFFB45309),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const CreateGoodsReceiptScreen(
+                      userRole: 'ADMIN',
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red[700],
+                side: BorderSide(color: Colors.red.shade200),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Đăng xuất tài khoản Admin'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminActionCard extends StatelessWidget {
+  const _AdminActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.tint,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color tint;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.line),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: tint,
+                child: Icon(icon, color: iconColor, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      'Xin chào, $userName',
-                      textAlign: TextAlign.center,
+                      title,
                       style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 2),
                     Text(
-                      userEmail,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppColors.muted),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Đăng nhập Admin đã được xác minh. Tuy nhiên, main.dart '
-                      'chưa được nối với màn hình quản trị/cấp quyền thực tế. '
-                      'Tài khoản Admin được giữ ở màn hình này thay vì bị '
-                      'đưa vào giao diện khách hàng.',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    OutlinedButton.icon(
-                      onPressed: onLogout,
-                      icon: const Icon(Icons.logout_rounded),
-                      label: const Text('Đăng xuất'),
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.muted,
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.muted,
+              ),
+            ],
           ),
         ),
       ),
