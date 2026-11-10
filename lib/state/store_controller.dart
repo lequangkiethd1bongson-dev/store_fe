@@ -34,19 +34,25 @@ class StoreController extends ChangeNotifier {
 
   /// danh sách sản phẩm đang hiển thị, lấy từ api hoặc dữ liệu mẫu.
   List<Product> get products => List.unmodifiable(_products);
+
   /// danh sách danh mục sản phẩm, lấy từ api hoặc dữ liệu mẫu.
   List<ProductCategory> get categories => List.unmodifiable(_categories);
+
   /// cho biết đang chờ backend trả danh sách sản phẩm.
   bool get isLoading => _isLoading;
+
   /// nội dung lỗi của lần tải gần nhất, null nếu thành công.
   String? get errorMessage => _errorMessage;
+
   /// cho biết danh sách hiện tại đã lấy được từ backend hay chưa.
   bool get loadedFromApi => _loadedFromApi;
 
   /// trả về bản sao chỉ đọc của số lượng từng sản phẩm trong giỏ.
   Map<String, int> get quantities => Map.unmodifiable(_quantities);
+
   /// trả về danh sách đơn hàng đã tạo trong phiên chạy hiện tại.
   List<StoreOrder> get orders => List.unmodifiable(_orders);
+
   /// cộng số lượng của mọi sản phẩm trong giỏ để hiện huy hiệu giỏ hàng.
   int get cartCount =>
       _quantities.values.fold(0, (sum, quantity) => sum + quantity);
@@ -65,8 +71,10 @@ class StoreController extends ChangeNotifier {
 
   /// cộng thành tiền của tất cả dòng hàng trong giỏ.
   int get subtotal => cartLines.fold(0, (sum, line) => sum + line.total);
+
   /// trả phí giao hàng mẫu, bằng không khi giỏ hàng đang trống.
   int get deliveryFee => _quantities.isEmpty ? 0 : 10000;
+
   /// tính tổng tiền hàng và phí giao hàng mẫu.
   int get total => subtotal + deliveryFee;
 
@@ -132,8 +140,19 @@ class StoreController extends ChangeNotifier {
   }
 
   /// tìm sản phẩm theo mã định danh hoặc báo lỗi nếu mã không tồn tại.
-  Product productById(String id) =>
-      _products.firstWhere((product) => product.id == id);
+  Product productById(String id) {
+    return _products.firstWhere(
+      (product) => product.id == id,
+      orElse: () => Product(
+        id: id,
+        name: 'Sản phẩm $id',
+        price: 0,
+        rating: 5.0,
+        category: 'Hàng hóa',
+        imageUrl: 'assets/images/logosieuthi.png',
+      ),
+    );
+  }
 
   /// thêm số lượng sản phẩm vào giỏ rồi thông báo các màn hình đang nghe.
   void addToCart(Product product, {int quantity = 1}) {
@@ -182,7 +201,9 @@ class StoreController extends ChangeNotifier {
     _orders.insert(0, order);
 
     // Gửi đơn mua lên backend không đồng bộ
-    _orderService.createOrder(lines: cartLines, total: order.total).catchError((e) {
+    _orderService.createOrder(lines: cartLines, total: order.total).catchError((
+      e,
+    ) {
       debugPrint('Tạo đơn hàng online thất bại (chuyển sang chế độ local): $e');
       return null;
     });

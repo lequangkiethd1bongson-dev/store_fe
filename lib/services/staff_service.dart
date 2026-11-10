@@ -3,8 +3,7 @@ import '../core/network/api_client.dart';
 
 /// Dịch vụ kết nối các API dành cho Nhân viên (Kệ hàng, Kho, Bán hàng POS, Chấm công).
 class StaffService {
-  StaffService({ApiClient? apiClient})
-      : _apiClient = apiClient ?? ApiClient();
+  StaffService({ApiClient? apiClient}) : _apiClient = apiClient ?? ApiClient();
 
   final ApiClient _apiClient;
 

@@ -13,15 +13,32 @@ export 'product.dart';
 enum UserRole {
   customer,
   salesStaff,
+  storeManager,
   warehouseStaff,
+  warehouseManager,
+  admin,
   staff;
 
   static UserRole fromString(String? role) {
     final clean = (role ?? '').toUpperCase();
+    if (clean.contains('STORE_MANAGER') ||
+        clean.contains('STOREMANAGER') ||
+        clean.contains('QUAN_LY_CUA_HANG')) {
+      return UserRole.storeManager;
+    }
+    if (clean.contains('WAREHOUSE_MANAGER') || clean.contains('KHO_MANAGER')) {
+      return UserRole.warehouseManager;
+    }
     if (clean.contains('WAREHOUSE') || clean.contains('KHO')) {
       return UserRole.warehouseStaff;
     }
-    if (clean.contains('SALES') || clean.contains('BAN_HANG') || clean.contains('BANHANG')) {
+    if (clean == 'ADMIN') {
+      return UserRole.admin;
+    }
+    if (clean == 'SALE' ||
+        clean.contains('SALES') ||
+        clean.contains('BAN_HANG') ||
+        clean.contains('BANHANG')) {
       return UserRole.salesStaff;
     }
     if (clean.contains('STAFF') || clean.contains('NHAN_VIEN')) {
@@ -47,17 +64,28 @@ class AppUser {
   final String? phone;
   final UserRole role;
 
+  /// kiểm tra người dùng có phải quản lý cửa hàng không.
+  bool get isStoreManager => role == UserRole.storeManager;
+
   /// kiểm tra người dùng có phải nhân viên bán hàng không.
   bool get isSalesStaff => role == UserRole.salesStaff;
 
+  /// kiểm tra người dùng thuộc cửa hàng (quản lý hoặc bán hàng).
+  bool get isStoreStaff =>
+      role == UserRole.storeManager || role == UserRole.salesStaff;
+
   /// kiểm tra người dùng có phải nhân viên kho không.
-  bool get isWarehouseStaff => role == UserRole.warehouseStaff;
+  bool get isWarehouseStaff =>
+      role == UserRole.warehouseStaff || role == UserRole.warehouseManager;
 
   /// kiểm tra người dùng có phải nhân viên siêu thị không.
   bool get isStaff =>
       role == UserRole.staff ||
+      role == UserRole.storeManager ||
       role == UserRole.salesStaff ||
-      role == UserRole.warehouseStaff;
+      role == UserRole.warehouseStaff ||
+      role == UserRole.warehouseManager ||
+      role == UserRole.admin;
 
   /// kiểm tra người dùng là khách hàng thông thường.
   bool get isCustomer => role == UserRole.customer;
@@ -77,13 +105,17 @@ class AppUser {
     'name': name,
     'email': email,
     'phone': phone,
-    'role': role == UserRole.salesStaff
+    'role': role == UserRole.storeManager
+        ? 'STORE_MANAGER'
+        : role == UserRole.salesStaff
         ? 'SALES_STAFF'
         : role == UserRole.warehouseStaff
-            ? 'WAREHOUSE_STAFF'
-            : role == UserRole.staff
-                ? 'STAFF'
-                : 'CUSTOMER',
+        ? 'WAREHOUSE_STAFF'
+        : role == UserRole.warehouseManager
+        ? 'WAREHOUSE_MANAGER'
+        : role == UserRole.admin
+        ? 'ADMIN'
+        : 'CUSTOMER',
   };
 }
 

@@ -1,29 +1,3 @@
-/// BƯỚC 3 — mô hình sản phẩm dùng chung cho toàn ứng dụng.
-///
-/// đây là class `Product` DUY NHẤT trong dự án. `store_models.dart` chỉ
-/// export lại tệp này, nên mọi màn hình cũ vẫn dùng được mà không bị lỗi
-/// "trùng kiểu Product".
-///
-/// json backend cần trả cho mỗi sản phẩm (camelCase):
-/// ```json
-/// {
-///   "id": "milk",                 // String hoặc Long đều được
-///   "name": "Sữa tươi Vinamilk 1L",
-///   "price": 36500,               // giá bán hiện tại (vnđ, bắt buộc)
-///   "oldPrice": 42000,            // giá gốc trước giảm, null nếu không giảm
-///   "importPrice": 30000,         // giá nhập, chỉ cần cho khu nhân viên
-///   "barcode": "8938501001001",
-///   "rating": 4.9,                // 0.0 – 5.0
-///   "category": "Sữa & trứng",    // phải trùng tên trong GET /categories
-///   "imageUrl": "https://...",
-///   "brand": "VINAMILK",
-///   "packageSize": "1 lít",
-///   "description": "Sữa tươi 100%...",
-///   "stock": 48                   // số lượng còn bán được
-/// }
-/// ```
-/// để tương thích với bảng database đang có, [Product.fromJson] cũng chấp nhận
-/// các tên cũ `selling_price`, `import_price`, `quantity`, `image_url`.
 class Product {
   const Product({
     required this.id,
@@ -39,6 +13,8 @@ class Product {
     this.packageSize,
     this.description,
     this.stock = 24,
+    this.supplierId,
+    this.isActive = true,
   });
 
   final String id;
@@ -61,6 +37,12 @@ class Product {
   /// số lượng còn bán được (tương ứng `quantity`).
   final int stock;
 
+  /// ID nhà cung cấp liên kết (nếu có).
+  final String? supplierId;
+
+  /// Trạng thái hoạt động của sản phẩm.
+  final bool isActive;
+
   /// tính phần trăm giảm giá nếu giá cũ lớn hơn giá hiện tại.
   int? get discountPercent {
     final previousPrice = oldPrice;
@@ -71,21 +53,36 @@ class Product {
   /// chuyển một object json từ backend thành [Product].
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
-      id: _pick(json, ['id', 'productId'])?.toString() ?? '',
-      name: _pick(json, ['name', 'productName'])?.toString() ?? '',
-      price: _toInt(_pick(json, ['price', 'sellingPrice', 'selling_price'])) ??
-          0,
+      id: _pick(json, ['id', 'productId', 'product_id'])?.toString() ?? '',
+      name:
+          _pick(json, ['name', 'productName', 'product_name'])?.toString() ??
+          '',
+      price:
+          _toInt(_pick(json, ['price', 'sellingPrice', 'selling_price'])) ?? 0,
       oldPrice: _toInt(_pick(json, ['oldPrice', 'old_price'])),
       importPrice: _toInt(_pick(json, ['importPrice', 'import_price'])),
       barcode: _pick(json, ['barcode'])?.toString(),
       rating: _toDouble(json['rating']) ?? 0,
       category: _readCategory(json['category']),
-      imageUrl: _pick(json, ['imageUrl', 'image_url', 'image'])?.toString() ??
-          '',
+      imageUrl:
+          _pick(json, ['imageUrl', 'image_url', 'image'])?.toString() ?? '',
       brand: json['brand']?.toString(),
       packageSize: _pick(json, ['packageSize', 'package_size'])?.toString(),
       description: json['description']?.toString(),
-      stock: _toInt(_pick(json, ['stock', 'quantity'])) ?? 0,
+      stock:
+          _toInt(
+            _pick(json, [
+              'storeStockQuantity',
+              'store_stock_quantity',
+              'stock',
+              'quantity',
+              'warehouseQuantity',
+              'warehouse_quantity',
+            ]),
+          ) ??
+          0,
+      supplierId: _pickSupplierId(json),
+      isActive: _toBool(json['isActive'] ?? json['is_active'] ?? json['active']) ?? true,
     );
   }
 
@@ -104,7 +101,28 @@ class Product {
     'packageSize': packageSize,
     'description': description,
     'stock': stock,
+    if (supplierId != null) 'supplierId': supplierId,
+    'isActive': isActive,
   };
+
+  static String? _pickSupplierId(Map<String, dynamic> json) {
+    final direct = _pick(json, ['supplierId', 'supplier_id']);
+    if (direct != null && direct.toString().trim().isNotEmpty) {
+      return direct.toString().trim();
+    }
+    if (json['supplier'] is Map) {
+      final sMap = json['supplier'] as Map;
+      return (sMap['id'] ?? sMap['supplierId'] ?? sMap['supplier_id'])?.toString();
+    }
+    return null;
+  }
+
+  static bool? _toBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    final str = value.toString().trim().toLowerCase();
+    return str == 'true' || str == '1' || str == 'active';
+  }
 
   /// lấy giá trị đầu tiên khác null theo danh sách tên trường.
   static dynamic _pick(Map<String, dynamic> json, List<String> keys) {

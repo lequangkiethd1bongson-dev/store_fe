@@ -29,47 +29,48 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  String _determineRole(String email) {
-    final clean = email.toLowerCase();
-    if (clean.contains('warehouse') || clean.contains('kho')) {
-      return 'WAREHOUSE_STAFF';
-    }
-    if (clean.contains('sales') || clean.contains('banhang') || clean.contains('staff') || clean.contains('nhanvien')) {
-      return 'SALES_STAFF';
-    }
-    return 'CUSTOMER';
-  }
+  // String _determineRole(String email) {
+  //   final clean = email.toLowerCase();
+  //   if (clean.contains('warehouse') || clean.contains('kho')) {
+  //     return 'WAREHOUSE_STAFF';
+  //   }
+  //   if (clean.contains('sales') || clean.contains('banhang') || clean.contains('staff') || clean.contains('nhanvien')) {
+  //     return 'SALES_STAFF';
+  //   }
+  //   return 'CUSTOMER';
+  // }
 
   Future<void> _submit() async {
-    if (_isSubmitting || !_formKey.currentState!.validate()) return;
-    final account = _accountController.text.trim();
-    final password = _passwordController.text;
-    final inputName = account.split('@').first;
+    if (_isSubmitting || !(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isSubmitting = true);
-
-    String finalName = inputName;
-    String finalEmail = account;
-    String finalRole = _determineRole(account);
-
+    final authService = AuthService();
     try {
-      final authService = AuthService();
-      final res = await authService.login(
-        account: account,
-        password: password,
+      final result = await authService.login(
+        account: _accountController.text.trim(),
+        password: _passwordController.text,
       );
-      if (res['user'] is Map) {
-        final user = res['user'] as Map;
-        finalName = user['name']?.toString() ?? finalName;
-        finalEmail = user['email']?.toString() ?? user['account']?.toString() ?? finalEmail;
-        finalRole = user['role']?.toString() ?? finalRole;
+      final user = Map<String, dynamic>.from(result['user'] as Map);
+      final name = (user['name'] ?? '').toString();
+      final email = (user['email'] ?? '').toString();
+      final role = (user['role'] ?? '').toString();
+      if (name.isEmpty || email.isEmpty || role.isEmpty) {
+        throw const FormatException('Hồ sơ nhân viên thiếu thông tin.');
       }
+      if (!mounted) return;
+      widget.onComplete(name, email, role);
     } catch (e) {
-      debugPrint('Xác thực với backend API không thành công (dùng tài khoản local): $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Đăng nhập thất bại: ${e.toString().replaceFirst('ApiException: ', '')}',
+          ),
+        ),
+      );
+    } finally {
+      authService.dispose();
+      if (mounted) setState(() => _isSubmitting = false);
     }
-
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    widget.onComplete(finalName, finalEmail, finalRole);
   }
 
   @override
@@ -80,9 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            _LoginHero(
-              onBack: () => Navigator.of(context).maybePop(),
-            ),
+            _LoginHero(onBack: () => Navigator.of(context).maybePop()),
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 24, 22, 28),
               child: Form(
@@ -101,10 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 5),
                     const Text(
                       'Đăng nhập để tiếp tục trải nghiệm cùng SSM4',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                     const SizedBox(height: 24),
                     _LoginFieldLabel(
@@ -217,9 +213,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) => RegisterScreen(
-                              onComplete: widget.onComplete,
-                            ),
+                            builder: (_) =>
+                                RegisterScreen(onComplete: widget.onComplete),
                           ),
                         );
                       },
@@ -394,10 +389,7 @@ class _LoginFieldLabel extends StatelessWidget {
 }
 
 class _LoginSubmitButton extends StatelessWidget {
-  const _LoginSubmitButton({
-    required this.isLoading,
-    required this.onPressed,
-  });
+  const _LoginSubmitButton({required this.isLoading, required this.onPressed});
 
   final bool isLoading;
   final VoidCallback onPressed;
