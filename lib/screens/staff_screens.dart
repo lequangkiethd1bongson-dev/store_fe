@@ -4,6 +4,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../core/network/api_client.dart';
 import '../models/restock_models.dart';
 import '../models/store_models.dart';
+import '../services/employee_management_service.dart';
 import '../services/restock_service.dart';
 import '../state/staff_controller.dart';
 import '../theme/app_theme.dart';
@@ -3163,7 +3164,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/// Màn hình Quản lý Tài khoản Cá nhân dành riêng cho Nhân viên (Sales & Warehouse Staff)
+/// Màn hình Quản lý Tài khoản Cá nhân dành riêng cho Nhân viên (Sales, Warehouse & Admin)
 class _StaffProfileScreen extends StatefulWidget {
   const _StaffProfileScreen({
     required this.staffName,
@@ -3180,15 +3181,51 @@ class _StaffProfileScreen extends StatefulWidget {
 }
 
 class _StaffProfileScreenState extends State<_StaffProfileScreen> {
-  late String _phone = '0987 654 321';
-  late String _email = 'staff01@ssm4.com';
+  final EmployeeManagementService _hrService = EmployeeManagementService();
+  String _staffCode = '';
+  String _fullName = '';
+  String _branchName = 'Siêu thị SSM4';
+  String _phone = '0987 654 321';
+  String _email = 'staff01@ssm4.com';
   bool _notifyNewOrder = true;
   bool _notifyLowStock = true;
+  String? _employeeId;
+
+  @override
+  void initState() {
+    super.initState();
+    _fullName = widget.staffName.isEmpty ? 'Nhân viên SSM4' : widget.staffName;
+    _staffCode = widget.roleTitle.contains('Kho')
+        ? 'NV-KHO-8932'
+        : 'NV-POS-1042';
+    _loadProfileFromBackend();
+  }
+
+  @override
+  void dispose() {
+    _hrService.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProfileFromBackend() async {
+    try {
+      final profile = await _hrService.getStaffProfile();
+      if (!mounted) return;
+      setState(() {
+        _employeeId = profile.id;
+        _staffCode = profile.code;
+        if (profile.fullName.isNotEmpty) _fullName = profile.fullName;
+        if (profile.phone.isNotEmpty) _phone = profile.phone;
+        if (profile.email.isNotEmpty) _email = profile.email;
+        _branchName = profile.branchDisplay;
+        _notifyLowStock = profile.notifyShift;
+        _notifyNewOrder = profile.notifyEmail;
+      });
+    } catch (_) {}
+  }
 
   void _showEditProfileDialog() {
-    final nameController = TextEditingController(
-      text: widget.staffName.isEmpty ? 'Nhân viên SSM4' : widget.staffName,
-    );
+    final nameController = TextEditingController(text: _fullName);
     final phoneController = TextEditingController(text: _phone);
     final emailController = TextEditingController(text: _email);
 
@@ -3222,15 +3259,38 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.blue700),
-            onPressed: () {
-              setState(() {
-                _phone = phoneController.text.trim();
-                _email = emailController.text.trim();
-              });
+            onPressed: () async {
+              final nextName = nameController.text.trim();
+              final nextPhone = phoneController.text.trim();
+              final nextEmail = emailController.text.trim();
               Navigator.of(dialogContext).pop();
+              try {
+                final updated = await _hrService.updateStaffProfile(
+                  employeeId: _employeeId,
+                  fullName: nextName.isEmpty ? _fullName : nextName,
+                  phone: nextPhone,
+                  email: nextEmail,
+                  notifyShift: _notifyLowStock,
+                  notifyEmail: _notifyNewOrder,
+                );
+                if (!mounted) return;
+                setState(() {
+                  _fullName = updated.fullName;
+                  _phone = updated.phone;
+                  _email = updated.email;
+                });
+              } catch (_) {
+                if (!mounted) return;
+                setState(() {
+                  if (nextName.isNotEmpty) _fullName = nextName;
+                  _phone = nextPhone;
+                  _email = nextEmail;
+                });
+              }
+              if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Đã cập nhật thông tin cá nhân!'),
+                  content: Text('Đã cập nhật thông tin cá nhân lên hệ thống!'),
                   backgroundColor: Colors.green,
                 ),
               );
@@ -3278,8 +3338,24 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.blue700),
-            onPressed: () {
+            onPressed: () async {
+              final nextPass = newPassController.text.trim();
+              if (nextPass.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Mật khẩu mới cần ít nhất 6 ký tự.'),
+                  ),
+                );
+                return;
+              }
               Navigator.of(dialogContext).pop();
+              try {
+                await _hrService.changePassword(
+                  employeeId: _employeeId,
+                  newPassword: nextPass,
+                );
+              } catch (_) {}
+              if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Đã cập nhật mật khẩu thành công!'),
@@ -3297,14 +3373,29 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
     );
   }
 
+  Future<void> _saveNotificationToggles(bool shiftVal, bool emailVal) async {
+    setState(() {
+      _notifyLowStock = shiftVal;
+      _notifyNewOrder = emailVal;
+    });
+    try {
+      await _hrService.updateStaffProfile(
+        employeeId: _employeeId,
+        fullName: _fullName,
+        phone: _phone,
+        email: _email,
+        notifyShift: shiftVal,
+        notifyEmail: emailVal,
+      );
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
-    final displayName = widget.staffName.isEmpty
-        ? 'Nhân viên SSM4'
-        : widget.staffName;
-    final staffId = widget.roleTitle.contains('Kho')
-        ? 'NV-KHO-8932'
-        : 'NV-POS-1042';
+    final displayName = _fullName.isEmpty
+        ? (widget.staffName.isEmpty ? 'Nhân viên SSM4' : widget.staffName)
+        : _fullName;
+    final staffId = _staffCode;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -3407,13 +3498,18 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
                 ),
                 const Divider(height: 10),
                 _ProfileInfoTile(
+                  icon: Icons.qr_code_rounded,
+                  label: 'Mã nhân viên',
+                  value: staffId,
+                ),
+                _ProfileInfoTile(
                   icon: Icons.store_rounded,
-                  label: 'Chi nhánh',
-                  value: 'Siêu thị SSM4 - Chi nhánh Hà Nội',
+                  label: 'Chi nhánh / Kho phụ trách',
+                  value: _branchName,
                 ),
                 _ProfileInfoTile(
                   icon: Icons.badge_outlined,
-                  label: 'Chức danh',
+                  label: 'Vị trí làm việc',
                   value: widget.roleTitle,
                 ),
                 _ProfileInfoTile(
@@ -3429,7 +3525,7 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
                 _ProfileInfoTile(
                   icon: Icons.schedule_rounded,
                   label: 'Ca làm việc cố định',
-                  value: 'Ca sáng (07:00 - 15:00)',
+                  value: 'Ca 1 (07:00 - 15:00)',
                 ),
               ],
             ),
@@ -3468,7 +3564,8 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 value: _notifyLowStock,
-                onChanged: (val) => setState(() => _notifyLowStock = val),
+                onChanged: (val) =>
+                    _saveNotificationToggles(val, _notifyNewOrder),
               ),
               const Divider(height: 1, indent: 16, endIndent: 16),
               SwitchListTile(
@@ -3481,7 +3578,8 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 value: _notifyNewOrder,
-                onChanged: (val) => setState(() => _notifyNewOrder = val),
+                onChanged: (val) =>
+                    _saveNotificationToggles(_notifyLowStock, val),
               ),
             ],
           ),

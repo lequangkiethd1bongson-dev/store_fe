@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../core/constants/api_constants.dart';
 import '../core/network/api_client.dart';
 import '../models/supplier.dart';
@@ -26,8 +29,26 @@ class SupplierService {
       if (e.statusCode == 404) {
         data = await _apiClient.get(ApiConstants.adminSuppliers);
       } else {
-        rethrow;
+        debugPrint('Backend API getSuppliers lỗi: $e. Thử đọc từ Supabase...');
       }
+    } catch (e) {
+      debugPrint('Backend API không phản hồi: $e. Đọc từ Supabase...');
+    }
+
+    if (data == null) {
+      try {
+        final res = await Supabase.instance.client.from('suppliers').select();
+        if (res is List) {
+          final list = res
+              .whereType<Map>()
+              .map((item) => Supplier.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+          return activeOnly ? list.where((s) => s.isActive).toList() : list;
+        }
+      } catch (e) {
+        debugPrint('Lỗi đọc bảng suppliers trên Supabase: $e');
+      }
+      return [];
     }
 
     final dynamic items =
@@ -75,15 +96,27 @@ class SupplierService {
       if (e.statusCode == 404) {
         data = await _apiClient.post(ApiConstants.suppliers, body: body);
       } else {
-        rethrow;
+        debugPrint('Backend createSupplier lỗi: $e');
       }
+    } catch (e) {
+      debugPrint('Backend createSupplier offline: $e');
     }
 
     if (data is Map) {
       return Supplier.fromJson(Map<String, dynamic>.from(data));
     }
-    throw const ApiException(
-      'Dữ liệu nhà cung cấp trả về từ máy chủ không hợp lệ.',
-    );
+
+    // Fallback: ghi trực tiếp vào Supabase database
+    try {
+      final res = await Supabase.instance.client.from('suppliers').insert({
+        'name': name.trim(),
+        'phone': phone.trim(),
+        'address': address.trim(),
+        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+      }).select().single();
+      return Supplier.fromJson(Map<String, dynamic>.from(res));
+    } catch (e) {
+      throw ApiException('Không thể lưu nhà cung cấp: $e');
+    }
   }
 }

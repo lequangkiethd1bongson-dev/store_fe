@@ -1332,3 +1332,55 @@ on conflict (barcode) do nothing;
 -- =====================================================================
 
 
+
+
+-- =====================================================================
+-- 17. QUẢN LÝ NHÂN SỰ, PHÂN LỊCH CA LÀM VIỆC & BẢNG CÔNG TÍNH LƯƠNG
+-- =====================================================================
+ALTER TABLE public.employees
+  ADD COLUMN IF NOT EXISTS notify_shift boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS notify_email boolean NOT NULL DEFAULT true;
+
+CREATE TABLE IF NOT EXISTS public.employee_shifts (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id   uuid NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,
+  work_date     date NOT NULL,
+  shift_code    text NOT NULL DEFAULT 'SHIFT_1' CHECK (shift_code IN ('SHIFT_1', 'SHIFT_2', 'OFF')),
+  store_id      uuid REFERENCES public.stores(id) ON DELETE SET NULL,
+  warehouse_id  uuid REFERENCES public.warehouses(id) ON DELETE SET NULL,
+  note          text,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (employee_id, work_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_employee_shifts_emp_date ON public.employee_shifts (employee_id, work_date);
+CREATE INDEX IF NOT EXISTS idx_employee_shifts_store ON public.employee_shifts (store_id);
+CREATE INDEX IF NOT EXISTS idx_employee_shifts_warehouse ON public.employee_shifts (warehouse_id);
+
+CREATE TABLE IF NOT EXISTS public.employee_timesheets (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id     uuid NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,
+  month_year      text NOT NULL,
+  work_days       integer NOT NULL DEFAULT 22 CHECK (work_days >= 0),
+  standard_days   integer NOT NULL DEFAULT 26 CHECK (standard_days > 0),
+  total_hours     numeric(8,1) NOT NULL DEFAULT 176.0 CHECK (total_hours >= 0),
+  overtime_hours  numeric(8,1) NOT NULL DEFAULT 0.0 CHECK (overtime_hours >= 0),
+  hourly_rate     numeric(12,0) NOT NULL DEFAULT 35000 CHECK (hourly_rate >= 0),
+  allowance       numeric(12,0) NOT NULL DEFAULT 500000 CHECK (allowance >= 0),
+  deduction       numeric(12,0) NOT NULL DEFAULT 0 CHECK (deduction >= 0),
+  total_salary    numeric(14,0) NOT NULL DEFAULT 6660000 CHECK (total_salary >= 0),
+  status          text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+  approved_by     uuid REFERENCES public.employees(id) ON DELETE SET NULL,
+  approved_at     timestamptz,
+  note            text,
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (employee_id, month_year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_employee_timesheets_month ON public.employee_timesheets (month_year, status);
+CREATE INDEX IF NOT EXISTS idx_employee_timesheets_emp ON public.employee_timesheets (employee_id);
+CREATE INDEX IF NOT EXISTS idx_employee_timesheets_approver ON public.employee_timesheets (approved_by);
+
+ALTER TABLE public.employee_shifts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.employee_timesheets ENABLE ROW LEVEL SECURITY;

@@ -11,6 +11,7 @@ import 'services/auth_service.dart';
 
 import 'data/sample_data.dart';
 import 'models/store_models.dart';
+import 'screens/admin_employee_screens.dart';
 import 'screens/cart_checkout_screens.dart';
 import 'screens/catalog_screens.dart';
 import 'screens/goods_receipt_screens.dart';
@@ -28,11 +29,11 @@ Future<void> main() async {
 
   const supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://aaelclxxsknskpeqasfj.supabase.co',
+    defaultValue: 'https://imtbcjdrnvjbmdxvnunh.supabase.co',
   );
   const publishableKey = String.fromEnvironment(
     'SUPABASE_PUBLISHABLE_KEY',
-    defaultValue: 'sb_publishable_fGGwRPSnIamIZrUqSLtHuQ_eLJ8sonf',
+    defaultValue: 'sb_publishable_c8SigvWlTEVgHb4uBjhe3Q_HjmmTjPO',
   );
 
   await Supabase.initialize(url: supabaseUrl, publishableKey: publishableKey);
@@ -330,7 +331,11 @@ class _SmartMartAppState extends State<SmartMartApp> {
 }
 
 /// Màn hình Không gian làm việc Quản trị viên (Admin Workspace)
-class AdminWorkspaceScreen extends StatelessWidget {
+/// Thiết kế dựa theo bố cục của RootShell & HomeScreen:
+/// - Trang chủ Admin quản lý doanh thu của các cửa hàng đang có
+/// - Menu trượt bên trái (_AdminSideMenu) là các chức năng của Admin
+/// - Thanh điều hướng ở dưới (_AdminGlassBottomNavigation) gồm Trang chủ, Menu Chức năng, Hồ sơ NV, Chấm công, Tạo TK NV
+class AdminWorkspaceScreen extends StatefulWidget {
   const AdminWorkspaceScreen({
     required this.userName,
     required this.userEmail,
@@ -343,103 +348,43 @@ class AdminWorkspaceScreen extends StatelessWidget {
   final VoidCallback onLogout;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        title: const Text('Quản trị viên hệ thống'),
-        actions: [
-          IconButton(
-            tooltip: 'Đăng xuất',
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout_rounded),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.blue900, AppColors.blue700],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.blue900.withValues(alpha: 0.18),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    child: const Icon(
-                      Icons.admin_panel_settings_rounded,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'QUẢN TRỊ VIÊN (ADMIN)',
-                          style: TextStyle(
-                            color: Color(0xFFCBE4FF),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          userName.isNotEmpty ? userName : 'Quản trị viên',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          userEmail,
-                          style: const TextStyle(
-                            color: Color(0xFFDCEBFA),
-                            fontSize: 11,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Chức năng quản trị',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            _AdminActionCard(
-              icon: Icons.business_rounded,
-              title: 'Quản lý Nhà cung cấp',
-              subtitle: 'Xem danh sách, tìm kiếm và thêm nhà cung cấp mới',
-              tint: const Color(0xFFEFF6FF),
-              iconColor: AppColors.blue700,
-              onTap: () {
+  State<AdminWorkspaceScreen> createState() => _AdminWorkspaceScreenState();
+}
+
+class _AdminWorkspaceScreenState extends State<AdminWorkspaceScreen> {
+  int _selectedTab = 0;
+
+  static const _tabTitles = <String>[
+    'Trang chủ Quản trị',
+    'Chức năng của Admin',
+    'Quản lý Hồ sơ Nhân viên',
+    'Chấm công Nhân viên',
+    'Tạo Tài khoản Nhân viên',
+  ];
+
+  Future<void> _showAdminSideMenu() async {
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Đóng menu Admin',
+      barrierColor: AppColors.blue900.withValues(alpha: 0.32),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (dialogCtx, animation, secondaryAnimation) => Align(
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: 0.78,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: _AdminSideMenu(
+              userName: widget.userName,
+              userEmail: widget.userEmail,
+              selectedTab: _selectedTab,
+              onSelectTab: (index) {
+                Navigator.of(dialogCtx).pop();
+                setState(() => _selectedTab = index);
+              },
+              onOpenSuppliers: () {
+                Navigator.of(dialogCtx).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const SupplierManagementScreen(
@@ -448,15 +393,8 @@ class AdminWorkspaceScreen extends StatelessWidget {
                   ),
                 );
               },
-            ),
-            const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.inventory_2_rounded,
-              title: 'Nhập hàng từ Nhà cung cấp',
-              subtitle: 'Xem tất cả phiếu nhập toàn hệ thống, theo dõi tiến độ',
-              tint: const Color(0xFFF0FDF4),
-              iconColor: const Color(0xFF15803D),
-              onTap: () {
+              onOpenGoodsReceipts: () {
+                Navigator.of(dialogCtx).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const GoodsReceiptsScreen(
@@ -465,15 +403,8 @@ class AdminWorkspaceScreen extends StatelessWidget {
                   ),
                 );
               },
-            ),
-            const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.add_circle_outline_rounded,
-              title: 'Tạo phiếu nhập kho mới',
-              subtitle: 'Lập phiếu nhập hàng từ nhà cung cấp vào kho được chọn',
-              tint: const Color(0xFFFFFBEB),
-              iconColor: const Color(0xFFB45309),
-              onTap: () {
+              onOpenCreateReceipt: () {
+                Navigator.of(dialogCtx).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const CreateGoodsReceiptScreen(
@@ -482,90 +413,375 @@ class AdminWorkspaceScreen extends StatelessWidget {
                   ),
                 );
               },
+              onLogout: () {
+                Navigator.of(dialogCtx).pop();
+                widget.onLogout();
+              },
             ),
-            const SizedBox(height: 24),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red[700],
-                side: BorderSide(color: Colors.red.shade200),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+        ),
+      ),
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(-1, 0),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
               ),
-              onPressed: onLogout,
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Đăng xuất tài khoản Admin'),
             ),
-          ],
+            child: child,
+          ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = <Widget>[
+      AdminHomeScreen(
+        userName: widget.userName,
+        userEmail: widget.userEmail,
+        onOpenMenu: _showAdminSideMenu,
+        onSelectBottomTab: (index) => setState(() => _selectedTab = index),
+        onLogout: widget.onLogout,
+      ),
+      AdminFunctionsMenuScreen(
+        onSelectBottomTab: (index) => setState(() => _selectedTab = index),
+      ),
+      const AdminStaffProfileManagementScreen(),
+      const AdminAttendanceScreen(),
+      const AdminCreateEmployeeScreen(),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 640;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: isWide ? 480 : double.infinity,
+            ),
+            child: AnnotatedRegion<SystemUiOverlayStyle>(
+              value: SystemUiOverlayStyle(
+                statusBarColor: _selectedTab == 0
+                    ? Colors.transparent
+                    : Colors.white,
+                statusBarIconBrightness: _selectedTab == 0
+                    ? Brightness.light
+                    : Brightness.dark,
+                statusBarBrightness: _selectedTab == 0
+                    ? Brightness.dark
+                    : Brightness.light,
+              ),
+              child: Scaffold(
+                backgroundColor: AppColors.canvas,
+                extendBody: true,
+                appBar: _selectedTab == 0
+                    ? null
+                    : AppBar(
+                        leading: IconButton(
+                          tooltip: 'Mở menu chức năng Admin',
+                          onPressed: _showAdminSideMenu,
+                          icon: const Icon(Icons.menu_rounded),
+                        ),
+                        title: Text(_tabTitles[_selectedTab]),
+                        actions: [
+                          IconButton(
+                            tooltip: 'Về trang chủ doanh thu',
+                            onPressed: () => setState(() => _selectedTab = 0),
+                            icon: const Icon(Icons.home_outlined),
+                          ),
+                          IconButton(
+                            tooltip: 'Đăng xuất',
+                            onPressed: widget.onLogout,
+                            icon: const Icon(Icons.logout_rounded),
+                          ),
+                        ],
+                      ),
+                body: SafeArea(
+                  top: _selectedTab != 0,
+                  bottom: false,
+                  child: IndexedStack(index: _selectedTab, children: pages),
+                ),
+                bottomNavigationBar: SafeArea(
+                  top: false,
+                  minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: _AdminGlassBottomNavigation(
+                    currentIndex: _selectedTab,
+                    onTap: (index) => setState(() => _selectedTab = index),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AdminGlassBottomNavigation extends StatelessWidget {
+  const _AdminGlassBottomNavigation({
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  static const _items = <(IconData, IconData, String, int)>[
+    (Icons.home_outlined, Icons.home_rounded, 'Trang chủ', 0),
+    (Icons.apps_outlined, Icons.apps_rounded, 'Chức năng', 1),
+    (Icons.badge_outlined, Icons.badge_rounded, 'Hồ sơ NV', 2),
+    (Icons.fact_check_outlined, Icons.fact_check_rounded, 'Chấm công', 3),
+    (
+      Icons.person_add_alt_outlined,
+      Icons.person_add_alt_1_rounded,
+      'Tạo TK NV',
+      4,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          height: 68,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.78),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.92)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.blue900.withValues(alpha: 0.14),
+                blurRadius: 22,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: List.generate(_items.length, (index) {
+              final item = _items[index];
+              final selected = item.$4 == currentIndex;
+              final icon = selected ? item.$2 : item.$1;
+              return Expanded(
+                child: InkWell(
+                  onTap: () => onTap(item.$4),
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? AppColors.blue700.withValues(alpha: 0.16)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            height: 26,
+                            child: Center(
+                              child: Icon(
+                                icon,
+                                size: 22,
+                                color: selected
+                                    ? AppColors.blue700
+                                    : AppColors.blue800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.$3,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: selected
+                                  ? AppColors.blue700
+                                  : AppColors.blue900,
+                              fontSize: 9,
+                              fontWeight: selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
         ),
       ),
     );
   }
 }
 
-class _AdminActionCard extends StatelessWidget {
-  const _AdminActionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.tint,
-    required this.iconColor,
-    required this.onTap,
+class _AdminSideMenu extends StatelessWidget {
+  const _AdminSideMenu({
+    required this.userName,
+    required this.userEmail,
+    required this.selectedTab,
+    required this.onSelectTab,
+    required this.onOpenSuppliers,
+    required this.onOpenGoodsReceipts,
+    required this.onOpenCreateReceipt,
+    required this.onLogout,
   });
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color tint;
-  final Color iconColor;
-  final VoidCallback onTap;
+  final String userName;
+  final String userEmail;
+  final int selectedTab;
+  final ValueChanged<int> onSelectTab;
+  final VoidCallback onOpenSuppliers;
+  final VoidCallback onOpenGoodsReceipts;
+  final VoidCallback onOpenCreateReceipt;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.line),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: tint,
-                child: Icon(icon, color: iconColor, size: 24),
+    return Material(
+      color: Colors.white,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 26, 18, 20),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.blue900, AppColors.blue700],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    child: const Icon(
+                      Icons.admin_panel_settings_rounded,
+                      color: Colors.white,
+                      size: 30,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 11,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    userName.isNotEmpty ? userName : 'Quản trị viên',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    userEmail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFD6E8FF),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'QUẢN TRỊ VIÊN HỆ THỐNG SSM4',
+                    style: TextStyle(
+                      color: Color(0xFFFFD58A),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  _SideMenuItem(
+                    icon: Icons.home_rounded,
+                    title: 'Trang chủ (Doanh thu cửa hàng)',
+                    onTap: () => onSelectTab(0),
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.apps_rounded,
+                    title: 'Tất cả chức năng của Admin',
+                    onTap: () => onSelectTab(1),
+                  ),
+                  const Divider(),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: Text(
+                      'CHỨC NĂNG CỦA ADMIN',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
                         color: AppColors.muted,
                       ),
                     ),
-                  ],
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.business_rounded,
+                    title: 'Quản lý nhà cung cấp',
+                    onTap: onOpenSuppliers,
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.inventory_2_rounded,
+                    title: 'Nhập hàng từ nhà cung cấp',
+                    onTap: onOpenGoodsReceipts,
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.add_circle_outline_rounded,
+                    title: 'Tạo phiếu nhập kho mới',
+                    onTap: onOpenCreateReceipt,
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.badge_rounded,
+                    title: 'Quản lý hồ sơ nhân viên',
+                    onTap: () => onSelectTab(2),
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.fact_check_rounded,
+                    title: 'Chấm công cho nhân viên',
+                    onTap: () => onSelectTab(3),
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.person_add_alt_1_rounded,
+                    title: 'Tạo tài khoản cho nhân viên',
+                    onTap: () => onSelectTab(4),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red[700],
+                  side: BorderSide(color: Colors.red.shade200),
                 ),
+                onPressed: onLogout,
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('Đăng xuất Admin'),
               ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.muted,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
