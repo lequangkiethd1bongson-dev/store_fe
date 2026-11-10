@@ -37,20 +37,18 @@ class GoodsReceiptService {
       query: query.isNotEmpty ? query : null,
     );
 
-    final dynamic items =
-        data is Map ? (data['content'] ?? data['items'] ?? data['data']) : data;
+    final dynamic items = data is Map
+        ? (data['content'] ?? data['items'] ?? data['data'])
+        : data;
 
     if (items is! List) {
       return [];
     }
 
-    final list =
-        items
-            .whereType<Map>()
-            .map(
-              (item) => GoodsReceipt.fromJson(Map<String, dynamic>.from(item)),
-            )
-            .toList();
+    final list = items
+        .whereType<Map>()
+        .map((item) => GoodsReceipt.fromJson(Map<String, dynamic>.from(item)))
+        .toList();
 
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
@@ -143,10 +141,9 @@ class GoodsReceiptService {
     String receiptId, {
     String? reason,
   }) async {
-    final body =
-        reason != null && reason.trim().isNotEmpty
-            ? {'reason': reason.trim(), 'rejectReason': reason.trim()}
-            : null;
+    final body = reason != null && reason.trim().isNotEmpty
+        ? {'reason': reason.trim(), 'rejectReason': reason.trim()}
+        : null;
 
     final data = await _apiClient.post(
       ApiConstants.cancelWarehouseGoodsReceipt(receiptId),

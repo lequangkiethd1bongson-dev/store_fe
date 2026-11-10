@@ -27,14 +27,13 @@ class GoodsReceiptItem {
 
   String get displayUnit =>
       (packageSize != null && packageSize!.trim().isNotEmpty)
-          ? packageSize!
-          : 'Sản phẩm';
+      ? packageSize!
+      : 'Sản phẩm';
 
   factory GoodsReceiptItem.fromJson(Map<String, dynamic> json) {
-    final prod =
-        json['product'] is Map
-            ? json['product'] as Map<String, dynamic>
-            : null;
+    final prod = json['product'] is Map
+        ? json['product'] as Map<String, dynamic>
+        : null;
 
     return GoodsReceiptItem(
       productId:
@@ -78,7 +77,9 @@ class GoodsReceiptItem {
       ),
       quantity: _toInt(json['quantity'] ?? json['amount']) ?? 0,
       importPrice:
-          _toInt(json['importPrice'] ?? json['import_price'] ?? json['price']) ??
+          _toInt(
+            json['importPrice'] ?? json['import_price'] ?? json['price'],
+          ) ??
           0,
       lotNo: (json['lotNo'] ?? json['lot_no'] ?? json['lotNumber'])?.toString(),
       expiryDate: _parseDate(json['expiryDate'] ?? json['expiry_date']),
@@ -196,12 +197,12 @@ class GoodsReceipt {
     final creator = json['creator'] is Map
         ? json['creator'] as Map<String, dynamic>
         : (json['employee'] is Map
-            ? json['employee'] as Map<String, dynamic>
-            : (json['user'] is Map
-                ? json['user'] as Map<String, dynamic>
-                : (json['created_by_employee'] is Map
-                    ? json['created_by_employee'] as Map<String, dynamic>
-                    : null)));
+              ? json['employee'] as Map<String, dynamic>
+              : (json['user'] is Map
+                    ? json['user'] as Map<String, dynamic>
+                    : (json['created_by_employee'] is Map
+                          ? json['created_by_employee'] as Map<String, dynamic>
+                          : null)));
     final wh = json['warehouse'] is Map
         ? json['warehouse'] as Map<String, dynamic>
         : null;
@@ -219,17 +220,18 @@ class GoodsReceipt {
       }
     }
 
-    final creatorName = (json['displayCreatedBy'] ??
-            json['created_by_name'] ??
-            json['createdByName'] ??
-            json['createdByFullName'] ??
-            json['created_by_full_name'] ??
-            json['creatorName'] ??
-            json['creator_name'] ??
-            creator?['name'] ??
-            creator?['fullName'] ??
-            creator?['full_name'])
-        ?.toString();
+    final creatorName =
+        (json['displayCreatedBy'] ??
+                json['created_by_name'] ??
+                json['createdByName'] ??
+                json['createdByFullName'] ??
+                json['created_by_full_name'] ??
+                json['creatorName'] ??
+                json['creator_name'] ??
+                creator?['name'] ??
+                creator?['fullName'] ??
+                creator?['full_name'])
+            ?.toString();
 
     return GoodsReceipt(
       id: (json['id'] ?? json['receiptId'] ?? json['code'] ?? '').toString(),
@@ -239,9 +241,8 @@ class GoodsReceipt {
       warehouseName:
           (json['warehouseName'] ?? json['warehouse_name'] ?? wh?['name'])
               ?.toString(),
-      supplierId:
-          (json['supplierId'] ?? json['supplier_id'] ?? supp?['id'])
-              ?.toString(),
+      supplierId: (json['supplierId'] ?? json['supplier_id'] ?? supp?['id'])
+          ?.toString(),
       supplierName:
           (json['supplierName'] ?? json['supplier_name'] ?? supp?['name'])
               ?.toString(),

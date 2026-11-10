@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../core/network/api_client.dart';
+import '../features/suppliers/screens/supplier_form_screen.dart';
+import '../features/suppliers/screens/supplier_list_screen.dart';
+import '../features/suppliers/state/supplier_controller.dart';
 import '../models/goods_receipt_models.dart';
 import '../models/product.dart';
 import '../models/supplier.dart';
@@ -251,9 +254,7 @@ class _GoodsReceiptsScreenState extends State<GoodsReceiptsScreen> {
                       labelStyle: TextStyle(
                         color: isSel ? Colors.white : AppColors.ink,
                         fontSize: 11,
-                        fontWeight: isSel
-                            ? FontWeight.bold
-                            : FontWeight.normal,
+                        fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                       ),
                       onSelected: (selected) {
                         if (selected) {
@@ -311,11 +312,7 @@ class _GoodsReceiptsScreenState extends State<GoodsReceiptsScreen> {
       return ListView(
         padding: const EdgeInsets.all(32),
         children: const [
-          Icon(
-            Icons.inventory_2_outlined,
-            size: 64,
-            color: AppColors.muted,
-          ),
+          Icon(Icons.inventory_2_outlined, size: 64, color: AppColors.muted),
           SizedBox(height: 16),
           Text(
             'Không tìm thấy phiếu nhập nào.',
@@ -567,7 +564,6 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
   bool _isLoadingSuppliers = true;
 
   List<Product> _allProducts = [];
-  bool _isLoadingProducts = true;
 
   String? _creatorName;
 
@@ -639,7 +635,8 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
         _creatorName =
             profile?['name']?.toString() ?? profile?['fullName']?.toString();
 
-        final empWhId = profile?['warehouseId']?.toString() ??
+        final empWhId =
+            profile?['warehouseId']?.toString() ??
             profile?['warehouse_id']?.toString();
 
         if (widget.initialReceipt != null) {
@@ -722,12 +719,8 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
       if (!mounted) return;
       setState(() {
         _allProducts = products;
-        _isLoadingProducts = false;
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoadingProducts = false);
-    }
+    } catch (_) {}
   }
 
   int get _totalAmountCalculated {
@@ -759,9 +752,9 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
           barcode: product.barcode,
           unit:
               (product.packageSize != null &&
-                      product.packageSize!.trim().isNotEmpty)
-                  ? product.packageSize!
-                  : 'Sản phẩm',
+                  product.packageSize!.trim().isNotEmpty)
+              ? product.packageSize!
+              : 'Sản phẩm',
           currentStock: product.stock,
           quantity: 1,
           importPrice: product.importPrice ?? product.price,
@@ -894,10 +887,8 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
 
     final supplier = _suppliers.firstWhere(
       (s) => s.id == _selectedSupplierId,
-      orElse: () => Supplier(
-        id: _selectedSupplierId ?? '',
-        name: 'Nhà cung cấp đã chọn',
-      ),
+      orElse: () =>
+          Supplier(id: _selectedSupplierId ?? '', name: 'Nhà cung cấp đã chọn'),
     );
 
     final confirm = await showDialog<bool>(
@@ -1005,9 +996,7 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Nhập kho thất bại: ${formatGoodsReceiptApiError(e)}',
-          ),
+          content: Text('Nhập kho thất bại: ${formatGoodsReceiptApiError(e)}'),
           backgroundColor: Colors.red[700],
         ),
       );
@@ -1098,7 +1087,9 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF8FAFC),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                ),
                               ),
                               child: Row(
                                 children: [
@@ -1110,7 +1101,8 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         const Text(
                                           'Kho nhận hàng (Cố định theo phân công)',
@@ -1120,7 +1112,9 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                                           ),
                                         ),
                                         Text(
-                                          _selectedWarehouseName ?? _selectedWarehouseId ?? 'Kho làm việc',
+                                          _selectedWarehouseName ??
+                                              _selectedWarehouseId ??
+                                              'Kho làm việc',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 13,
@@ -1173,7 +1167,8 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     const Text(
                                       'Nhà cung cấp (*)',
@@ -1190,10 +1185,18 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                                           foregroundColor: AppColors.blue700,
                                         ),
                                         onPressed: () async {
-                                          final newSupp = await showDialog<Supplier>(
-                                            context: context,
-                                            builder: (_) => const _AddSupplierDialog(),
-                                          );
+                                          final newSupp =
+                                              await Navigator.of(
+                                                context,
+                                              ).push<Supplier>(
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      SupplierFormScreen(
+                                                        controller:
+                                                            SupplierController(),
+                                                      ),
+                                                ),
+                                              );
                                           if (newSupp != null) {
                                             setState(() {
                                               _suppliers.insert(0, newSupp);
@@ -1201,7 +1204,10 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                                             });
                                           }
                                         },
-                                        icon: const Icon(Icons.add_rounded, size: 16),
+                                        icon: const Icon(
+                                          Icons.add_rounded,
+                                          size: 16,
+                                        ),
                                         label: const Text(
                                           'Thêm NCC mới',
                                           style: TextStyle(fontSize: 11),
@@ -1227,7 +1233,10 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                                     child: _selectedSupplier == null
                                         ? const Row(
                                             children: [
-                                              Icon(Icons.business_outlined, color: AppColors.muted),
+                                              Icon(
+                                                Icons.business_outlined,
+                                                color: AppColors.muted,
+                                              ),
                                               SizedBox(width: 8),
                                               Expanded(
                                                 child: Text(
@@ -1239,7 +1248,8 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                                                 ),
                                               ),
                                               Icon(
-                                                Icons.keyboard_arrow_down_rounded,
+                                                Icons
+                                                    .keyboard_arrow_down_rounded,
                                                 color: AppColors.muted,
                                               ),
                                             ],
@@ -1248,7 +1258,8 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                                             children: [
                                               const CircleAvatar(
                                                 radius: 18,
-                                                backgroundColor: AppColors.blue50,
+                                                backgroundColor:
+                                                    AppColors.blue50,
                                                 child: Icon(
                                                   Icons.business_rounded,
                                                   color: AppColors.blue700,
@@ -1258,12 +1269,14 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                                               const SizedBox(width: 10),
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       _selectedSupplier!.name,
                                                       style: const TextStyle(
-                                                        fontWeight: FontWeight.bold,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                         fontSize: 13,
                                                       ),
                                                     ),
@@ -1275,15 +1288,21 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                                                         color: AppColors.muted,
                                                       ),
                                                       maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
                                                     ),
-                                                    if (_selectedSupplier!.email != null &&
-                                                        _selectedSupplier!.email!.isNotEmpty)
+                                                    if (_selectedSupplier!
+                                                                .email !=
+                                                            null &&
+                                                        _selectedSupplier!
+                                                            .email!
+                                                            .isNotEmpty)
                                                       Text(
                                                         'Email: ${_selectedSupplier!.email}',
                                                         style: const TextStyle(
                                                           fontSize: 9,
-                                                          color: AppColors.muted,
+                                                          color:
+                                                              AppColors.muted,
                                                         ),
                                                       ),
                                                   ],
@@ -1380,11 +1399,11 @@ class _CreateGoodsReceiptScreenState extends State<CreateGoodsReceiptScreen> {
                                         context: context,
                                         isScrollControlled: true,
                                         showDragHandle: true,
-                                        builder: (_) =>
-                                            _ProductPickerSheet(
-                                              products: _allProducts,
-                                              selectedSupplierId: _selectedSupplierId,
-                                            ),
+                                        builder: (_) => _ProductPickerSheet(
+                                          products: _allProducts,
+                                          selectedSupplierId:
+                                              _selectedSupplierId,
+                                        ),
                                       );
                                   if (selectedProd != null) {
                                     _onAddProductSelected(selectedProd);
@@ -1689,9 +1708,7 @@ class _GoodsReceiptItemRow extends StatelessWidget {
                           item.expiryDate ??
                           DateTime.now().add(const Duration(days: 180)),
                       firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(
-                        const Duration(days: 3650),
-                      ),
+                      lastDate: DateTime.now().add(const Duration(days: 3650)),
                     );
                     if (picked != null) {
                       item.expiryDate = picked;
@@ -1699,10 +1716,7 @@ class _GoodsReceiptItemRow extends StatelessWidget {
                     }
                   },
                   icon: const Icon(Icons.calendar_today_rounded, size: 14),
-                  label: Text(
-                    expiryText,
-                    style: const TextStyle(fontSize: 10),
-                  ),
+                  label: Text(expiryText, style: const TextStyle(fontSize: 10)),
                 ),
               ),
             ],
@@ -1786,10 +1800,14 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                       foregroundColor: AppColors.blue700,
                     ),
                     onPressed: () async {
-                      final newSupp = await showDialog<Supplier>(
-                        context: context,
-                        builder: (_) => const _AddSupplierDialog(),
-                      );
+                      final newSupp = await Navigator.of(context)
+                          .push<Supplier>(
+                            MaterialPageRoute(
+                              builder: (_) => SupplierFormScreen(
+                                controller: SupplierController(),
+                              ),
+                            ),
+                          );
                       if (newSupp != null && mounted) {
                         setState(() {
                           _list.insert(0, newSupp);
@@ -1843,7 +1861,9 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                                 : AppColors.blue50,
                             child: Icon(
                               Icons.business_rounded,
-                              color: isSelected ? Colors.white : AppColors.blue700,
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppColors.blue700,
                               size: 20,
                             ),
                           ),
@@ -1854,7 +1874,9 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                               fontWeight: isSelected
                                   ? FontWeight.w800
                                   : FontWeight.bold,
-                              color: isSelected ? AppColors.blue900 : AppColors.ink,
+                              color: isSelected
+                                  ? AppColors.blue900
+                                  : AppColors.ink,
                             ),
                           ),
                           subtitle: Column(
@@ -1945,10 +1967,7 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
 
 /// Modal chọn sản phẩm để thêm vào phiếu nhập
 class _ProductPickerSheet extends StatefulWidget {
-  const _ProductPickerSheet({
-    required this.products,
-    this.selectedSupplierId,
-  });
+  const _ProductPickerSheet({required this.products, this.selectedSupplierId});
 
   final List<Product> products;
   final String? selectedSupplierId;
@@ -2385,10 +2404,7 @@ class _GoodsReceiptDetailScreenState extends State<GoodsReceiptDetailScreen> {
                         'Kho nhập hàng',
                         req.warehouseName ?? req.warehouseId,
                       ),
-                      _buildInfoRow(
-                        'Người lập phiếu',
-                        req.creatorDisplay,
-                      ),
+                      _buildInfoRow('Người lập phiếu', req.creatorDisplay),
                       _buildInfoRow(
                         'Thời gian tạo',
                         _formatDate(req.createdAt),
@@ -2554,7 +2570,9 @@ class _GoodsReceiptDetailScreenState extends State<GoodsReceiptDetailScreen> {
                                           Expanded(
                                             flex: 3,
                                             child: Text(
-                                              formatReceiptVnd(item.importPrice),
+                                              formatReceiptVnd(
+                                                item.importPrice,
+                                              ),
                                               textAlign: TextAlign.right,
                                               style: const TextStyle(
                                                 fontSize: 11,
@@ -2721,527 +2739,5 @@ class _GoodsReceiptDetailScreenState extends State<GoodsReceiptDetailScreen> {
   }
 }
 
-/// Màn hình Quản lý Nhà cung cấp (Chỉ dành cho Admin)
-class SupplierManagementScreen extends StatefulWidget {
-  const SupplierManagementScreen({required this.userRole, super.key});
-
-  final String userRole;
-
-  @override
-  State<SupplierManagementScreen> createState() =>
-      _SupplierManagementScreenState();
-}
-
-class _SupplierManagementScreenState extends State<SupplierManagementScreen> {
-  final _supplierService = SupplierService();
-  List<Supplier> _suppliers = [];
-  bool _isLoading = true;
-  String? _error;
-  String _searchQuery = '';
-  String _filterActive = 'ALL';
-
-  bool get _isAdmin => isAdminRole(widget.userRole);
-
-  @override
-  void initState() {
-    super.initState();
-    if (_isAdmin) {
-      _loadSuppliers();
-    }
-  }
-
-  @override
-  void dispose() {
-    _supplierService.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadSuppliers() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final list = await _supplierService.getSuppliers();
-      if (!mounted) return;
-      setState(() {
-        _suppliers = list;
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _error = formatGoodsReceiptApiError(e);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_isAdmin) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Quản lý nhà cung cấp')),
-        body: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.gpp_bad_rounded, size: 64, color: Colors.red),
-                SizedBox(height: 16),
-                Text(
-                  'Truy cập bị từ chối',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Chỉ tài khoản Admin mới có quyền quản lý và thêm nhà cung cấp mới.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.muted),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    final filtered = _suppliers.where((s) {
-      if (_filterActive == 'active' && !s.isActive) return false;
-      if (_filterActive == 'inactive' && s.isActive) return false;
-
-      final q = _searchQuery.trim().toLowerCase();
-      if (q.isEmpty) return true;
-      return s.name.toLowerCase().contains(q) ||
-          (s.phone != null && s.phone!.contains(q)) ||
-          (s.email != null && s.email!.toLowerCase().contains(q));
-    }).toList();
-
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        title: const Text('Quản lý nhà cung cấp'),
-        actions: [
-          IconButton(
-            tooltip: 'Tải lại',
-            onPressed: _loadSuppliers,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.blue700,
-        onPressed: () async {
-          final newSupp = await showDialog<Supplier>(
-            context: context,
-            builder: (_) => const _AddSupplierDialog(),
-          );
-          if (newSupp != null) {
-            _loadSuppliers();
-          }
-        },
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: const Text(
-          'THÊM NCC MỚI',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: TextField(
-                onChanged: (val) => setState(() => _searchQuery = val),
-                decoration: const InputDecoration(
-                  hintText: 'Tìm theo tên, SĐT hoặc email nhà cung cấp',
-                  prefixIcon: Icon(Icons.search_rounded),
-                  isDense: true,
-                ),
-              ),
-            ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  ChoiceChip(
-                    label: const Text('Tất cả'),
-                    selected: _filterActive == 'ALL',
-                    onSelected: (_) => setState(() => _filterActive = 'ALL'),
-                  ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('Đang hoạt động'),
-                    selected: _filterActive == 'active',
-                    onSelected: (_) => setState(() => _filterActive = 'active'),
-                  ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('Tạm ngưng'),
-                    selected: _filterActive == 'inactive',
-                    onSelected:
-                        (_) => setState(() => _filterActive = 'inactive'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _loadSuppliers,
-                child: _buildContent(filtered),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContent(List<Supplier> filtered) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: _loadSuppliers,
-              child: const Text('Thử lại'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (filtered.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.all(32),
-        children: const [
-          Icon(Icons.business_outlined, size: 64, color: AppColors.muted),
-          SizedBox(height: 16),
-          Text(
-            'Chưa có nhà cung cấp nào.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-          ),
-        ],
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-      itemCount: filtered.length,
-      itemBuilder: (context, idx) {
-        final supp = filtered[idx];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      supp.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: supp.isActive
-                            ? Colors.green.shade50
-                            : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        supp.isActive ? 'Đang hoạt động' : 'Tạm ngưng',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: supp.isActive
-                              ? Colors.green.shade800
-                              : Colors.grey.shade700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.phone_outlined,
-                      size: 15,
-                      color: AppColors.muted,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      supp.phone ?? 'Chưa có SĐT',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      size: 15,
-                      color: AppColors.muted,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        supp.address ?? 'Chưa có địa chỉ',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.muted,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (supp.email != null && supp.email!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.email_outlined,
-                        size: 15,
-                        color: AppColors.muted,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        supp.email!,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Dialog Thêm Nhà cung cấp mới (Yêu cầu Tên, SĐT 11 số, Địa chỉ, Email hợp lệ)
-class _AddSupplierDialog extends StatefulWidget {
-  const _AddSupplierDialog();
-
-  @override
-  State<_AddSupplierDialog> createState() => _AddSupplierDialogState();
-}
-
-class _AddSupplierDialogState extends State<_AddSupplierDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _supplierService = SupplierService();
-
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _faxController = TextEditingController();
-
-  bool _isActive = true;
-  bool _isSubmitting = false;
-  String? _errorMsg;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
-    _emailController.dispose();
-    _faxController.dispose();
-    _supplierService.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submitForm() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _isSubmitting = true;
-      _errorMsg = null;
-    });
-
-    try {
-      final newSupp = await _supplierService.createSupplier(
-        name: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        address: _addressController.text.trim(),
-        email: _emailController.text.trim(),
-        fax: _faxController.text.trim(),
-        isActive: _isActive,
-      );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Đã thêm nhà cung cấp "${newSupp.name}" thành công!'),
-          backgroundColor: Colors.green[700],
-        ),
-      );
-      Navigator.pop(context, newSupp);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isSubmitting = false;
-        _errorMsg = formatGoodsReceiptApiError(e);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Thêm Nhà cung cấp mới'),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_errorMsg != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(
-                    _errorMsg!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
-                  ),
-                ),
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Tên nhà cung cấp (*)',
-                ),
-                validator: (val) {
-                  if (val == null || val.trim().isEmpty) {
-                    return 'Vui lòng nhập tên nhà cung cấp';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Số điện thoại (11 số) (*)',
-                  hintText: 'VD: 09123456789',
-                ),
-                validator: (val) {
-                  final clean = val?.trim() ?? '';
-                  if (clean.isEmpty) {
-                    return 'Vui lòng nhập số điện thoại';
-                  }
-                  final phoneRegex = RegExp(r'^\d{11}$');
-                  if (!phoneRegex.hasMatch(clean)) {
-                    return 'Số điện thoại nhà cung cấp phải có đúng 11 chữ số.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(labelText: 'Địa chỉ (*)'),
-                validator: (val) {
-                  if (val == null || val.trim().isEmpty) {
-                    return 'Vui lòng nhập địa chỉ';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email (tùy chọn)',
-                ),
-                validator: (val) {
-                  final clean = val?.trim() ?? '';
-                  if (clean.isNotEmpty) {
-                    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-                    if (!emailRegex.hasMatch(clean)) {
-                      return 'Địa chỉ email không hợp lệ';
-                    }
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _faxController,
-                decoration: const InputDecoration(labelText: 'Fax (tùy chọn)'),
-              ),
-              const SizedBox(height: 10),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Trạng thái hoạt động'),
-                value: _isActive,
-                onChanged: (val) => setState(() => _isActive = val),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _isSubmitting ? null : () => Navigator.pop(context),
-          child: const Text('Hủy'),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: AppColors.blue700),
-          onPressed: _isSubmitting ? null : _submitForm,
-          child: _isSubmitting
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-              : const Text(
-                  'LƯU NHÀ CUNG CẤP',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-}
+/// Định danh màn hình Quản lý Nhà cung cấp theo Feature-based Architecture
+typedef SupplierManagementScreen = SupplierListScreen;

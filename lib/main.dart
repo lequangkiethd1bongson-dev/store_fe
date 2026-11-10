@@ -11,6 +11,7 @@ import 'services/auth_service.dart';
 
 import 'data/sample_data.dart';
 import 'models/store_models.dart';
+import 'features/suppliers/screens/supplier_list_screen.dart';
 import 'screens/cart_checkout_screens.dart';
 import 'screens/catalog_screens.dart';
 import 'screens/goods_receipt_screens.dart';
@@ -436,13 +437,13 @@ class AdminWorkspaceScreen extends StatelessWidget {
             _AdminActionCard(
               icon: Icons.business_rounded,
               title: 'Quản lý Nhà cung cấp',
-              subtitle: 'Xem danh sách, tìm kiếm và thêm nhà cung cấp mới',
+              subtitle: 'Xem danh sách, tìm kiếm và quản lý nhà cung cấp',
               tint: const Color(0xFFEFF6FF),
               iconColor: AppColors.blue700,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => const SupplierManagementScreen(
+                    builder: (_) => const SupplierListScreen(
                       userRole: 'ADMIN',
                     ),
                   ),
