@@ -4,10 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'core/network/api_client.dart';
+import 'services/auth_service.dart';
+
 import 'data/sample_data.dart';
 import 'models/store_models.dart';
+import 'features/suppliers/screens/supplier_list_screen.dart';
+import 'screens/admin_employee_screens.dart';
 import 'screens/cart_checkout_screens.dart';
 import 'screens/catalog_screens.dart';
+import 'screens/goods_receipt_screens.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/profile_order_screens.dart';
@@ -16,8 +24,29 @@ import 'state/staff_controller.dart';
 import 'state/store_controller.dart';
 import 'theme/app_theme.dart';
 
-/// khởi chạy ứng dụng ssm4.
-void main() {
+/// Khởi chạy ứng dụng SSM4 và khởi tạo Supabase Auth.
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  const supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://qsywhrvvpsytwfntnluv.supabase.co',
+  );
+  const publishableKey = String.fromEnvironment(
+    'SUPABASE_PUBLISHABLE_KEY',
+    defaultValue: 'sb_publishable__6Ht9Nd_CRMWbtSGuWs10A_jVzOzcS0',
+  );
+
+  await Supabase.initialize(url: supabaseUrl, publishableKey: publishableKey);
+
+  final auth = Supabase.instance.client.auth;
+  ApiClient.authToken = auth.currentSession?.accessToken;
+
+  // Luôn đồng bộ access token với phiên Supabase hiện tại, kể cả khi token được làm mới.
+  auth.onAuthStateChange.listen((state) {
+    ApiClient.authToken = state.session?.accessToken;
+  });
+
   runApp(const SmartMartApp());
 }
 
@@ -41,9 +70,6 @@ class _SmartMartAppState extends State<SmartMartApp> {
   String _userEmail = '';
   String _userRole = 'CUSTOMER';
 
-  /// BƯỚC 7 — khởi tạo các bộ quản lý dữ liệu dùng chung giữa các màn hình.
-  /// Dự án hiện quản lý trạng thái bằng ChangeNotifier + AnimatedBuilder.
-  /// Nếu sau này chuyển sang Provider / Riverpod / Bloc thì đăng ký tại đây.
   @override
   void initState() {
     super.initState();
@@ -90,17 +116,30 @@ class _SmartMartAppState extends State<SmartMartApp> {
           if (mounted) setState(() => _showLoginWelcome = false);
         },
       );
-    } else if (_userRole == 'SALES_STAFF') {
-      homeWidget = SalesStaffWorkspace(
+    } else if (_userRole == 'STORE_MANAGER' || _userRole == 'SALES_STAFF') {
+      homeWidget = StoreStaffWorkspace(
         controller: _staffController,
         staffName: _userName,
+        userRole: _userRole,
         onExit: () => _updateSession(null, null),
       );
-    } else if (_userRole == 'WAREHOUSE_STAFF') {
+    } else if (_userRole == 'WAREHOUSE_STAFF' ||
+        _userRole == 'WAREHOUSE_MANAGER' ||
+        _userRole == 'KHO_MANAGER' ||
+        _userRole == 'kho_manager' ||
+        _userRole == 'kho') {
       homeWidget = WarehouseStaffWorkspace(
         controller: _staffController,
         staffName: _userName,
+        userRole: _userRole,
         onExit: () => _updateSession(null, null),
+      );
+    } else if (_userRole == 'ADMIN') {
+      homeWidget = AdminWorkspaceScreen(
+        userName: _userName,
+        userEmail: _userEmail,
+        staffController: _staffController,
+        onLogout: () => _updateSession(null, null),
       );
     } else {
       homeWidget = RootShell(
@@ -125,47 +164,631 @@ class _SmartMartAppState extends State<SmartMartApp> {
     );
   }
 
-  /// đọc thông tin phiên đã lưu sau khi hiệu ứng mở ứng dụng kết thúc.
+  /// Khôi phục phiên từ Supabase; SharedPreferences chỉ lưu thông tin hiển thị,
+  /// không được dùng làm bằng chứng xác thực.
   Future<void> _finishStartup() async {
-    final preferences = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _isLoggedIn = preferences.getBool('session.loggedIn') ?? false;
-      _userName = preferences.getString('session.userName') ?? '';
-      _userEmail = preferences.getString('session.userEmail') ?? '';
-      _userRole = preferences.getString('session.userRole') ?? 'CUSTOMER';
-      _showStartupAnimation = false;
-    });
-  }
-
-  /// chuyển sang trạng thái chào mừng rồi lưu phiên đăng nhập ban đầu.
-  Future<void> _completeInitialLogin(String name, String email, String role) async {
-    if (mounted) setState(() => _showLoginWelcome = true);
-    await _updateSession(name, email, role);
-  }
-
-  /// lưu hoặc xóa phiên đăng nhập mẫu trong bộ nhớ thiết bị.
-  Future<void> _updateSession(String? name, String? email, [String? role]) async {
-    final preferences = await SharedPreferences.getInstance();
-    if (name == null || email == null) {
-      await preferences.remove('session.loggedIn');
-      await preferences.remove('session.userName');
-      await preferences.remove('session.userEmail');
-      await preferences.remove('session.userRole');
-    } else {
-      await preferences.setBool('session.loggedIn', true);
-      await preferences.setString('session.userName', name);
-      await preferences.setString('session.userEmail', email);
-      await preferences.setString('session.userRole', role ?? 'CUSTOMER');
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session == null) {
+        await _clearSavedSession(signOut: false);
+      } else {
+        ApiClient.authToken = session.accessToken;
+        final profile = await _fetchVerifiedProfile();
+        await _saveVerifiedProfile(profile);
+      }
+    } catch (error) {
+      debugPrint('Khôi phục phiên Supabase thất bại: $error');
+      await _clearSavedSession(signOut: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _showStartupAnimation = false;
+        });
+      }
     }
+  }
+
+  /// Chỉ lấy tên/email/role từ hồ sơ Java sau khi access token Supabase được xác minh.
+  Future<Map<String, String>> _fetchVerifiedProfile() async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null || session.accessToken.isEmpty) {
+      throw const FormatException('Không có phiên Supabase đang đăng nhập.');
+    }
+
+    ApiClient.authToken = session.accessToken;
+    final authService = AuthService();
+    try {
+      final profile = await authService.getMe();
+      final name = (profile['name'] ?? profile['fullName'] ?? '')
+          .toString()
+          .trim();
+      final email = (profile['email'] ?? '').toString().trim();
+      final role = (profile['role'] ?? '').toString().trim().toUpperCase();
+
+      const allowedRoles = <String>{
+        'STORE_MANAGER',
+        'SALES_STAFF',
+        'WAREHOUSE_STAFF',
+        'WAREHOUSE_MANAGER',
+        'KHO_MANAGER',
+        'KHO_STAFF',
+        'KHO',
+        'ADMIN',
+      };
+
+      if (name.isEmpty || email.isEmpty || role.isEmpty) {
+        throw const FormatException('Hồ sơ nhân viên chưa đầy đủ.');
+      }
+      if (!allowedRoles.contains(role)) {
+        throw const FormatException(
+          'Tài khoản chưa được Admin cấp vai trò hợp lệ.',
+        );
+      }
+
+      return <String, String>{'name': name, 'email': email, 'role': role};
+    } finally {
+      authService.dispose();
+    }
+  }
+
+  /// Lưu profile đã được Java xác nhận. Không lưu mật khẩu hoặc token vào SharedPreferences.
+  Future<void> _saveVerifiedProfile(Map<String, String> profile) async {
+    final preferences = await SharedPreferences.getInstance();
+    final name = profile['name']!;
+    final email = profile['email']!;
+    final role = profile['role']!;
+
+    await preferences.setBool('session.loggedIn', true);
+    await preferences.setString('session.userName', name);
+    await preferences.setString('session.userEmail', email);
+    await preferences.setString('session.userRole', role);
+
     if (!mounted) return;
     setState(() {
-      _isLoggedIn = name != null && email != null;
-      _userName = name ?? '';
-      _userEmail = email ?? '';
-      _userRole = role ?? 'CUSTOMER';
-      if (!_isLoggedIn) _showLoginWelcome = false;
+      _isLoggedIn = true;
+      _userName = name;
+      _userEmail = email;
+      _userRole = role;
     });
+  }
+
+  /// Khi màn hình đăng nhập đầu tiên gọi callback, xác minh profile lần nữa ở lớp gốc.
+  /// Điều này chặn callback cũ/local đi tiếp nếu không có session thật.
+  Future<void> _completeInitialLogin(
+    String name,
+    String email,
+    String role,
+  ) async {
+    if (Supabase.instance.client.auth.currentSession == null) {
+      ApiClient.authToken = null;
+      debugPrint('Bỏ qua callback đăng nhập vì không có Supabase session.');
+      return;
+    }
+
+    try {
+      final profile = await _fetchVerifiedProfile();
+      await _saveVerifiedProfile(profile);
+      if (mounted) {
+        setState(() => _showLoginWelcome = true);
+      }
+    } catch (error) {
+      debugPrint('Không xác minh được hồ sơ sau đăng nhập: $error');
+      await _clearSavedSession(signOut: true);
+    }
+  }
+
+  /// Cập nhật phiên từ callback chung. Role truyền từ UI không được tin cậy;
+  /// dữ liệu thật luôn được đọc lại từ Java/employee profile.
+  Future<void> _updateSession(
+    String? name,
+    String? email, [
+    String? role,
+  ]) async {
+    if (name == null || email == null) {
+      await _clearSavedSession(signOut: true);
+      return;
+    }
+
+    if (Supabase.instance.client.auth.currentSession == null) {
+      ApiClient.authToken = null;
+      debugPrint('Từ chối tạo phiên UI vì Supabase session không tồn tại.');
+      return;
+    }
+
+    try {
+      final profile = await _fetchVerifiedProfile();
+      await _saveVerifiedProfile(profile);
+    } catch (error) {
+      debugPrint('Không thể cập nhật phiên đăng nhập: $error');
+      await _clearSavedSession(signOut: true);
+    }
+  }
+
+  /// Xóa cache UI và token; signOut=true sẽ kết thúc phiên Supabase.
+  Future<void> _clearSavedSession({required bool signOut}) async {
+    ApiClient.authToken = null;
+    if (signOut) {
+      try {
+        await Supabase.instance.client.auth.signOut();
+      } catch (error) {
+        debugPrint('Không thể signOut từ Supabase: $error');
+      }
+    }
+
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove('session.loggedIn');
+    await preferences.remove('session.userName');
+    await preferences.remove('session.userEmail');
+    await preferences.remove('session.userRole');
+
+    if (!mounted) return;
+    setState(() {
+      _isLoggedIn = false;
+      _userName = '';
+      _userEmail = '';
+      _userRole = 'CUSTOMER';
+      _showLoginWelcome = false;
+    });
+  }
+}
+
+/// Màn hình Không gian làm việc Quản trị viên (Admin Workspace)
+/// Thiết kế dựa theo bố cục của RootShell & HomeScreen:
+/// - Trang chủ Admin quản lý doanh thu của các cửa hàng đang có
+/// - Menu trượt bên trái (_AdminSideMenu) là các chức năng của Admin
+/// - Thanh điều hướng ở dưới (_AdminGlassBottomNavigation) gồm Trang chủ, Menu Chức năng, Hồ sơ NV, Chấm công, Tạo TK NV
+class AdminWorkspaceScreen extends StatefulWidget {
+  const AdminWorkspaceScreen({
+    required this.userName,
+    required this.userEmail,
+    required this.staffController,
+    required this.onLogout,
+    super.key,
+  });
+
+  final String userName;
+  final String userEmail;
+  final StaffController staffController;
+  final VoidCallback onLogout;
+
+  @override
+  State<AdminWorkspaceScreen> createState() => _AdminWorkspaceScreenState();
+}
+
+class _AdminWorkspaceScreenState extends State<AdminWorkspaceScreen> {
+  int _selectedTab = 0;
+
+  static const _tabTitles = <String>[
+    'Trang chủ Quản trị',
+    'Chức năng của Admin',
+    'Quản lý Hồ sơ Nhân viên',
+    'Chấm công Nhân viên',
+    'Tạo Tài khoản Nhân viên',
+  ];
+
+  Future<void> _showAdminSideMenu() async {
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Đóng menu Admin',
+      barrierColor: AppColors.blue900.withValues(alpha: 0.32),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (dialogCtx, animation, secondaryAnimation) => Align(
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: 0.78,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: _AdminSideMenu(
+              userName: widget.userName,
+              userEmail: widget.userEmail,
+              selectedTab: _selectedTab,
+              onSelectTab: (index) {
+                Navigator.of(dialogCtx).pop();
+                setState(() => _selectedTab = index);
+              },
+              onOpenSuppliers: () {
+                Navigator.of(dialogCtx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SupplierListScreen(
+                      userRole: 'ADMIN',
+                    ),
+                  ),
+                );
+              },
+              onOpenGoodsReceipts: () {
+                Navigator.of(dialogCtx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const GoodsReceiptsScreen(
+                      userRole: 'ADMIN',
+                    ),
+                  ),
+                );
+              },
+              onOpenCreateReceipt: () {
+                Navigator.of(dialogCtx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const CreateGoodsReceiptScreen(
+                      userRole: 'ADMIN',
+                    ),
+                  ),
+                );
+              },
+              onLogout: () {
+                Navigator.of(dialogCtx).pop();
+                widget.onLogout();
+              },
+            ),
+          ),
+        ),
+      ),
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(-1, 0),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+            ),
+            child: child,
+          ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = <Widget>[
+      AdminHomeScreen(
+        userName: widget.userName,
+        userEmail: widget.userEmail,
+        onOpenMenu: _showAdminSideMenu,
+        onSelectBottomTab: (index) => setState(() => _selectedTab = index),
+        onLogout: widget.onLogout,
+      ),
+      AdminFunctionsMenuScreen(
+        onSelectBottomTab: (index) => setState(() => _selectedTab = index),
+      ),
+      const AdminStaffProfileManagementScreen(),
+      const AdminAttendanceScreen(),
+      const AdminCreateEmployeeScreen(),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 640;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: isWide ? 480 : double.infinity,
+            ),
+            child: AnnotatedRegion<SystemUiOverlayStyle>(
+              value: SystemUiOverlayStyle(
+                statusBarColor: _selectedTab == 0
+                    ? Colors.transparent
+                    : Colors.white,
+                statusBarIconBrightness: _selectedTab == 0
+                    ? Brightness.light
+                    : Brightness.dark,
+                statusBarBrightness: _selectedTab == 0
+                    ? Brightness.dark
+                    : Brightness.light,
+              ),
+              child: Scaffold(
+                backgroundColor: AppColors.canvas,
+                extendBody: true,
+                appBar: _selectedTab == 0
+                    ? null
+                    : AppBar(
+                        leading: IconButton(
+                          tooltip: 'Mở menu chức năng Admin',
+                          onPressed: _showAdminSideMenu,
+                          icon: const Icon(Icons.menu_rounded),
+                        ),
+                        title: Text(_tabTitles[_selectedTab]),
+                        actions: [
+                          IconButton(
+                            tooltip: 'Về trang chủ doanh thu',
+                            onPressed: () => setState(() => _selectedTab = 0),
+                            icon: const Icon(Icons.home_outlined),
+                          ),
+                          IconButton(
+                            tooltip: 'Đăng xuất',
+                            onPressed: widget.onLogout,
+                            icon: const Icon(Icons.logout_rounded),
+                          ),
+                        ],
+                      ),
+                body: SafeArea(
+                  top: _selectedTab != 0,
+                  bottom: false,
+                  child: IndexedStack(index: _selectedTab, children: pages),
+                ),
+                bottomNavigationBar: SafeArea(
+                  top: false,
+                  minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: _AdminGlassBottomNavigation(
+                    currentIndex: _selectedTab,
+                    onTap: (index) => setState(() => _selectedTab = index),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AdminGlassBottomNavigation extends StatelessWidget {
+  const _AdminGlassBottomNavigation({
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  static const _items = <(IconData, IconData, String, int)>[
+    (Icons.home_outlined, Icons.home_rounded, 'Trang chủ', 0),
+    (Icons.apps_outlined, Icons.apps_rounded, 'Chức năng', 1),
+    (Icons.badge_outlined, Icons.badge_rounded, 'Hồ sơ NV', 2),
+    (Icons.fact_check_outlined, Icons.fact_check_rounded, 'Chấm công', 3),
+    (
+      Icons.person_add_alt_outlined,
+      Icons.person_add_alt_1_rounded,
+      'Tạo TK NV',
+      4,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          height: 68,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.78),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.92)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.blue900.withValues(alpha: 0.14),
+                blurRadius: 22,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: List.generate(_items.length, (index) {
+              final item = _items[index];
+              final selected = item.$4 == currentIndex;
+              final icon = selected ? item.$2 : item.$1;
+              return Expanded(
+                child: InkWell(
+                  onTap: () => onTap(item.$4),
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? AppColors.blue700.withValues(alpha: 0.16)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            height: 26,
+                            child: Center(
+                              child: Icon(
+                                icon,
+                                size: 22,
+                                color: selected
+                                    ? AppColors.blue700
+                                    : AppColors.blue800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.$3,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: selected
+                                  ? AppColors.blue700
+                                  : AppColors.blue900,
+                              fontSize: 9,
+                              fontWeight: selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminSideMenu extends StatelessWidget {
+  const _AdminSideMenu({
+    required this.userName,
+    required this.userEmail,
+    required this.selectedTab,
+    required this.onSelectTab,
+    required this.onOpenSuppliers,
+    required this.onOpenGoodsReceipts,
+    required this.onOpenCreateReceipt,
+    required this.onLogout,
+  });
+
+  final String userName;
+  final String userEmail;
+  final int selectedTab;
+  final ValueChanged<int> onSelectTab;
+  final VoidCallback onOpenSuppliers;
+  final VoidCallback onOpenGoodsReceipts;
+  final VoidCallback onOpenCreateReceipt;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 26, 18, 20),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.blue900, AppColors.blue700],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    child: const Icon(
+                      Icons.admin_panel_settings_rounded,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    userName.isNotEmpty ? userName : 'Quản trị viên',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    userEmail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFD6E8FF),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'QUẢN TRỊ VIÊN HỆ THỐNG SSM4',
+                    style: TextStyle(
+                      color: Color(0xFFFFD58A),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  _SideMenuItem(
+                    icon: Icons.home_rounded,
+                    title: 'Trang chủ (Doanh thu cửa hàng)',
+                    onTap: () => onSelectTab(0),
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.apps_rounded,
+                    title: 'Tất cả chức năng của Admin',
+                    onTap: () => onSelectTab(1),
+                  ),
+                  const Divider(),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: Text(
+                      'CHỨC NĂNG CỦA ADMIN',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.business_rounded,
+                    title: 'Quản lý nhà cung cấp',
+                    onTap: onOpenSuppliers,
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.inventory_2_rounded,
+                    title: 'Nhập hàng từ nhà cung cấp',
+                    onTap: onOpenGoodsReceipts,
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.add_circle_outline_rounded,
+                    title: 'Tạo phiếu nhập kho mới',
+                    onTap: onOpenCreateReceipt,
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.badge_rounded,
+                    title: 'Quản lý hồ sơ nhân viên',
+                    onTap: () => onSelectTab(2),
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.fact_check_rounded,
+                    title: 'Chấm công cho nhân viên',
+                    onTap: () => onSelectTab(3),
+                  ),
+                  _SideMenuItem(
+                    icon: Icons.person_add_alt_1_rounded,
+                    title: 'Tạo tài khoản cho nhân viên',
+                    onTap: () => onSelectTab(4),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red[700],
+                  side: BorderSide(color: Colors.red.shade200),
+                ),
+                onPressed: onLogout,
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('Đăng xuất Admin'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -363,33 +986,36 @@ class _RootShellState extends State<RootShell> {
 
   /// mở màn hình đăng nhập và cập nhật thông tin khi người dùng hoàn tất.
   Future<void> _openLogin() async {
-    final credentials = await Navigator.of(context).push<(String, String, String)>(
-      PageRouteBuilder<(String, String, String)>(
-        transitionDuration: const Duration(milliseconds: 420),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, animation, secondaryAnimation) => LoginScreen(
-          onComplete: (name, email, role) =>
-              Navigator.of(context).pop((name, email, role)),
-        ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-            FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position:
-                    Tween<Offset>(
-                      begin: const Offset(0, 0.035),
-                      end: Offset.zero,
-                    ).animate(
-                      CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
+    final credentials = await Navigator.of(context)
+        .push<(String, String, String)>(
+          PageRouteBuilder<(String, String, String)>(
+            transitionDuration: const Duration(milliseconds: 420),
+            reverseTransitionDuration: const Duration(milliseconds: 300),
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                LoginScreen(
+                  onComplete: (name, email, role) =>
+                      Navigator.of(context).pop((name, email, role)),
+                ),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) =>
+                    FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position:
+                            Tween<Offset>(
+                              begin: const Offset(0, 0.035),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            ),
+                        child: child,
                       ),
                     ),
-                child: child,
-              ),
-            ),
-      ),
-    );
+          ),
+        );
     if (credentials == null || !mounted) return;
 
     await widget.onAuthChanged(credentials.$1, credentials.$2, credentials.$3);

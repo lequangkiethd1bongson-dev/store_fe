@@ -246,6 +246,7 @@ class SearchField extends StatelessWidget {
     this.onChanged,
     this.readOnly = false,
     this.onTap,
+    this.hintText = 'Bạn muốn tìm gì?',
     super.key,
   });
 
@@ -253,6 +254,7 @@ class SearchField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final bool readOnly;
   final VoidCallback? onTap;
+  final String hintText;
 
   /// dựng ô tìm kiếm và chuyển thao tác nhập về callback tương ứng.
   @override
@@ -263,7 +265,7 @@ class SearchField extends StatelessWidget {
       onTap: onTap,
       onChanged: onChanged,
       decoration: InputDecoration(
-        hintText: 'Bạn muốn tìm gì?',
+        hintText: hintText,
         hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
         prefixIcon: const Icon(Icons.search, color: AppColors.muted, size: 21),
         filled: true,

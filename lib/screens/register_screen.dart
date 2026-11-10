@@ -31,50 +31,76 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  String _determineRole(String email) {
-    final clean = email.toLowerCase();
-    if (clean.contains('warehouse') || clean.contains('kho')) {
-      return 'WAREHOUSE_STAFF';
-    }
-    if (clean.contains('sales') || clean.contains('banhang') || clean.contains('staff') || clean.contains('nhanvien')) {
-      return 'SALES_STAFF';
-    }
-    return 'CUSTOMER';
-  }
+  // String _determineRole(String email) {
+  //   final clean = email.toLowerCase();
+  //   if (clean.contains('warehouse') || clean.contains('kho')) {
+  //     return 'WAREHOUSE_STAFF';
+  //   }
+  //   if (clean.contains('sales') || clean.contains('banhang') || clean.contains('staff') || clean.contains('nhanvien')) {
+  //     return 'SALES_STAFF';
+  //   }
+  //   return 'CUSTOMER';
+  // }
 
   Future<void> _submit() async {
-    if (_isSubmitting || !_formKey.currentState!.validate()) return;
-    final name = _nameController.text.trim();
-    final account = _accountController.text.trim();
-    final password = _passwordController.text;
-    final role = _determineRole(account);
-
-    setState(() => _isSubmitting = true);
-
-    String finalName = name;
-    String finalEmail = account;
-    String finalRole = role;
-
-    try {
-      final authService = AuthService();
-      final res = await authService.register(
-        name: name,
-        account: account,
-        password: password,
-      );
-      if (res['user'] is Map) {
-        final user = res['user'] as Map;
-        finalName = user['name']?.toString() ?? finalName;
-        finalEmail = user['email']?.toString() ?? user['account']?.toString() ?? finalEmail;
-        finalRole = user['role']?.toString() ?? finalRole;
-      }
-    } catch (e) {
-      debugPrint('Đăng ký qua backend API không thành công (dùng tài khoản local): $e');
+    if (_isSubmitting || !(_formKey.currentState?.validate() ?? false)) {
+      return;
     }
 
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    widget.onComplete(finalName, finalEmail, finalRole);
+    setState(() => _isSubmitting = true);
+    final authService = AuthService();
+
+    try {
+      final result = await authService.register(
+        name: _nameController.text.trim(),
+        account: _accountController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      final requiresConfirmation = result['emailConfirmationRequired'] == true;
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Đăng ký thành công'),
+          content: Text(
+            requiresConfirmation
+                ? 'Hãy xác nhận email, sau đó chờ Admin kích hoạt tài khoản nhân viên.'
+                : 'Tài khoản đã được tạo. Bạn cần chờ Admin kích hoạt trước khi đăng nhập.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Về đăng nhập'),
+            ),
+          ],
+        ),
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Đăng ký thất bại: '
+            '${e.toString().replaceFirst('ApiException: ', '')}',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      authService.dispose();
+
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override
@@ -89,11 +115,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
               height: 280,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AppColors.blue900, AppColors.blue700, AppColors.blue600],
+                  colors: [
+                    AppColors.blue900,
+                    AppColors.blue700,
+                    AppColors.blue600,
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(34)),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(34),
+                ),
               ),
               child: Stack(
                 children: [
@@ -102,14 +134,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     top: 16,
                     child: IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                   const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.person_add_rounded, size: 56, color: Colors.white),
+                        Icon(
+                          Icons.person_add_rounded,
+                          size: 56,
+                          color: Colors.white,
+                        ),
                         SizedBox(height: 12),
                         Text(
                           'Tạo tài khoản SSM4',
@@ -122,7 +161,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         SizedBox(height: 4),
                         Text(
                           'Đăng ký thành viên mới cùng hệ thống',
-                          style: TextStyle(color: Color(0xFFD6E8FF), fontSize: 12),
+                          style: TextStyle(
+                            color: Color(0xFFD6E8FF),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -154,8 +196,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           prefixIcon: Icon(Icons.person_outline_rounded),
                           hintText: 'Nhập họ và tên',
                         ),
-                        validator: (val) =>
-                            val == null || val.trim().isEmpty ? 'Vui lòng nhập tên hiển thị' : null,
+                        validator: (val) => val == null || val.trim().isEmpty
+                            ? 'Vui lòng nhập tên hiển thị'
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -168,8 +211,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           prefixIcon: Icon(Icons.mail_outline_rounded),
                           hintText: 'Nhập email hoặc số điện thoại',
                         ),
-                        validator: (val) =>
-                            val == null || val.trim().isEmpty ? 'Vui lòng nhập email hoặc SĐT' : null,
+                        validator: (val) => val == null || val.trim().isEmpty
+                            ? 'Vui lòng nhập email hoặc SĐT'
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -182,12 +226,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           prefixIcon: const Icon(Icons.lock_outline_rounded),
                           hintText: 'Ít nhất 6 ký tự',
                           suffixIcon: IconButton(
-                            onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
-                            icon: Icon(_passwordVisible ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                            onPressed: () => setState(
+                              () => _passwordVisible = !_passwordVisible,
+                            ),
+                            icon: Icon(
+                              _passwordVisible
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
                           ),
                         ),
-                        validator: (val) =>
-                            val == null || val.length < 6 ? 'Mật khẩu cần ít nhất 6 ký tự' : null,
+                        validator: (val) => val == null || val.length < 6
+                            ? 'Mật khẩu cần ít nhất 6 ký tự'
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -200,8 +251,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           prefixIcon: Icon(Icons.lock_reset_rounded),
                           hintText: 'Nhập lại mật khẩu',
                         ),
-                        validator: (val) =>
-                            val != _passwordController.text ? 'Mật khẩu xác nhận không khớp' : null,
+                        validator: (val) => val != _passwordController.text
+                            ? 'Mật khẩu xác nhận không khớp'
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -219,7 +271,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Text(
                                 'ĐĂNG KÝ TÀI KHOẢN',

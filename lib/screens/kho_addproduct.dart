@@ -1,17 +1,16 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
 import '../state/staff_controller.dart';
 import '../theme/app_theme.dart';
+import '../core/network/api_client.dart';
+import '../services/product_service.dart';
 
 /// Giao diện dành riêng cho Nhân viên Quản lý Kho thêm sản phẩm mới vào hệ thống.
 class KhoAddProductScreen extends StatefulWidget {
-  const KhoAddProductScreen({
-    this.controller,
-    this.onProductAdded,
-    super.key,
-  });
+  const KhoAddProductScreen({this.controller, this.onProductAdded, super.key});
 
   final StaffController? controller;
   final ValueChanged<Product>? onProductAdded;
@@ -22,6 +21,13 @@ class KhoAddProductScreen extends StatefulWidget {
 
 class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
   final _formKey = GlobalKey<FormState>();
+  final ProductService _productService = ProductService();
+
+  List<WarehouseOption> _warehouses = const [];
+  String? _selectedWarehouseId;
+
+  bool _isLoadingWarehouses = true;
+  String? _warehouseLoadError;
 
   // Controllers
   final _nameController = TextEditingController();
@@ -48,7 +54,17 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
     'Hàng tiêu dùng',
   ];
 
-  static const _shelves = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3'];
+  static const _shelves = [
+    'A1',
+    'A2',
+    'A3',
+    'B1',
+    'B2',
+    'B3',
+    'C1',
+    'C2',
+    'C3',
+  ];
 
   // Image presets for quick selection
   static const _presetImages = [
@@ -61,6 +77,31 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
   void initState() {
     super.initState();
     _generateRandomBarcode();
+    _loadWarehouses();
+  }
+
+  Future<void> _loadWarehouses() async {
+    try {
+      final warehouses = await _productService.getWarehouses();
+
+      if (!mounted) return;
+
+      setState(() {
+        _warehouses = warehouses;
+        _selectedWarehouseId = warehouses.isEmpty ? null : warehouses.first.id;
+        _isLoadingWarehouses = false;
+        _warehouseLoadError = warehouses.isEmpty
+            ? 'Chưa có kho. Hãy tạo kho trên Supabase trước.'
+            : null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingWarehouses = false;
+        _warehouseLoadError = 'Không tải được danh sách kho: $error';
+      });
+    }
   }
 
   @override
@@ -74,89 +115,144 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
     _initialQuantityController.dispose();
     _descriptionController.dispose();
     _imageUrlController.dispose();
+    _productService.dispose();
     super.dispose();
   }
 
   void _generateRandomBarcode() {
     final random = Random();
-    final code = ' ';
+    final code = '8938${100000000 + random.nextInt(899999999)}';
     setState(() {
       _barcodeController.text = code;
     });
   }
 
   Future<void> _submitForm() async {
-    if (_isSubmitting || !_formKey.currentState!.validate()) return;
+    if (_isSubmitting || !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    final warehouseId = _selectedWarehouseId;
+
+    if (warehouseId == null || warehouseId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng chọn kho nhập hàng.')),
+      );
+      return;
+    }
 
     setState(() => _isSubmitting = true);
-
-    await Future<void>.delayed(const Duration(milliseconds: 350));
 
     final name = _nameController.text.trim();
     final barcode = _barcodeController.text.trim();
     final brand = _brandController.text.trim();
     final packageSize = _packageSizeController.text.trim();
     final description = _descriptionController.text.trim();
+
     final imageUrl = _imageUrlController.text.trim().isEmpty
         ? 'assets/images/logosieuthi.png'
         : _imageUrlController.text.trim();
 
-    final sellingPrice = int.tryParse(_sellingPriceController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    final importPrice = int.tryParse(_importPriceController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    final initialQuantity = int.tryParse(_initialQuantityController.text.trim()) ?? 50;
+    final sellingPrice =
+        int.tryParse(
+          _sellingPriceController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+        ) ??
+        0;
 
-    final productId = 'prod_${DateTime.now().millisecondsSinceEpoch}';
+    final importPrice =
+        int.tryParse(
+          _importPriceController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+        ) ??
+        0;
 
-    final newProduct = Product(
-      id: productId,
-      name: name,
-      price: sellingPrice,
-      importPrice: importPrice,
-      oldPrice: sellingPrice > 0 ? (sellingPrice * 1.15).round() : null,
-      rating: 5.0,
-      category: _selectedCategory,
-      imageUrl: imageUrl,
-      barcode: barcode,
-      brand: brand.isEmpty ? 'SSM4 Supermarket' : brand,
-      packageSize: packageSize.isEmpty ? 'Gói / Hộp' : packageSize,
-      description: description.isEmpty ? 'Sản phẩm mới nhập kho siêu thị SSM4.' : description,
-      stock: initialQuantity,
-    );
+    final initialQuantity =
+        int.tryParse(_initialQuantityController.text.trim()) ?? 50;
 
-    final controller = widget.controller;
-    if (controller != null) {
-      if (!controller.products.any((p) => p.id == newProduct.id)) {
-        controller.products.add(newProduct);
-      }
-      controller.receiveStock(newProduct, initialQuantity);
-    }
+    try {
+      // Gửi dữ liệu tới Java; Java lưu sản phẩm và tồn kho vào Supabase.
+      final apiProduct = await _productService.createProduct(
+        name: name,
+        price: sellingPrice,
+        oldPrice: sellingPrice > 0 ? (sellingPrice * 1.15).round() : null,
+        importPrice: importPrice,
+        barcode: barcode,
+        rating: 5.0,
+        category: _selectedCategory,
+        imageUrl: imageUrl,
+        brand: brand.isEmpty ? 'SSM4 Supermarket' : brand,
+        packageSize: packageSize.isEmpty ? 'Gói / Hộp' : packageSize,
+        description: description.isEmpty
+            ? 'Sản phẩm mới nhập kho siêu thị SSM4.'
+            : description,
+        stock: initialQuantity,
+        warehouseId: warehouseId,
+      );
 
-    if (widget.onProductAdded != null) {
-      widget.onProductAdded!(newProduct);
-    }
+      final createdProduct = Product(
+        id: apiProduct.id.isNotEmpty
+            ? apiProduct.id
+            : DateTime.now().millisecondsSinceEpoch.toString(),
+        name: apiProduct.name.isNotEmpty ? apiProduct.name : name,
+        price: apiProduct.price > 0 ? apiProduct.price : sellingPrice,
+        rating: apiProduct.rating > 0 ? apiProduct.rating : 5.0,
+        category: apiProduct.category.isNotEmpty
+            ? apiProduct.category
+            : _selectedCategory,
+        imageUrl: apiProduct.imageUrl.isNotEmpty
+            ? apiProduct.imageUrl
+            : imageUrl,
+        oldPrice: apiProduct.oldPrice,
+        importPrice: apiProduct.importPrice ?? importPrice,
+        barcode: (apiProduct.barcode != null && apiProduct.barcode!.isNotEmpty)
+            ? apiProduct.barcode
+            : barcode,
+        brand: apiProduct.brand ?? brand,
+        packageSize: apiProduct.packageSize ?? packageSize,
+        description: apiProduct.description ?? description,
+        stock: apiProduct.stock > 0 ? apiProduct.stock : initialQuantity,
+      );
 
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: Colors.white),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Đã nhập kho sản phẩm mới: "$name" ($initialQuantity sản phẩm)',
-              ),
-            ),
-          ],
+      // Dùng sản phẩm và UUID do backend trả về.
+      widget.controller?.addProduct(createdProduct);
+      widget.onProductAdded?.call(createdProduct);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Đã lưu "${createdProduct.name}" vào kho '
+            '(${createdProduct.stock} sản phẩm).',
+          ),
+          backgroundColor: Colors.green[700],
+          duration: const Duration(seconds: 3),
         ),
-        backgroundColor: Colors.green[700],
-        duration: const Duration(seconds: 3),
-      ),
-    );
+      );
 
-    Navigator.of(context).pop(newProduct);
+      Navigator.of(context).pop(createdProduct);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không thể lưu sản phẩm: ${error.message}'),
+          backgroundColor: Colors.red[700],
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Có lỗi khi lưu sản phẩm: $error'),
+          backgroundColor: Colors.red[700],
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override
@@ -195,7 +291,11 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                     CircleAvatar(
                       radius: 24,
                       backgroundColor: Colors.white24,
-                      child: Icon(Icons.add_shopping_cart_rounded, color: Colors.white, size: 26),
+                      child: Icon(
+                        Icons.add_shopping_cart_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
                     ),
                     SizedBox(width: 14),
                     Expanded(
@@ -213,7 +313,10 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                           SizedBox(height: 2),
                           Text(
                             'Nhập đầy đủ thông tin để lưu sản phẩm vào kho dự trữ',
-                            style: TextStyle(color: Color(0xFFDCEBFA), fontSize: 11),
+                            style: TextStyle(
+                              color: Color(0xFFDCEBFA),
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ),
@@ -237,8 +340,9 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                       prefixIcon: Icon(Icons.shopping_bag_outlined),
                       hintText: 'VD: Sữa tươi Vinamilk 100% 1L',
                     ),
-                    validator: (val) =>
-                        val == null || val.trim().isEmpty ? 'Vui lòng nhập tên sản phẩm' : null,
+                    validator: (val) => val == null || val.trim().isEmpty
+                        ? 'Vui lòng nhập tên sản phẩm'
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -251,8 +355,9 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                             labelText: 'Mã vạch / Barcode (*)',
                             prefixIcon: Icon(Icons.qr_code_2_rounded),
                           ),
-                          validator: (val) =>
-                              val == null || val.trim().isEmpty ? 'Vui lòng nhập mã vạch' : null,
+                          validator: (val) => val == null || val.trim().isEmpty
+                              ? 'Vui lòng nhập mã vạch'
+                              : null,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -265,16 +370,41 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: 'Danh mục / Nhóm hàng (*)',
-                      prefixIcon: Icon(Icons.category_outlined),
+                    value: _selectedWarehouseId,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'Kho nhập hàng (*)',
+                      prefixIcon: const Icon(Icons.warehouse_outlined),
+                      helperText:
+                          _warehouseLoadError ??
+                          'Số lượng ban đầu sẽ được lưu tại kho này.',
                     ),
-                    items: _categories
-                        .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) setState(() => _selectedCategory = val);
+                    hint: Text(
+                      _isLoadingWarehouses
+                          ? 'Đang tải kho...'
+                          : 'Chọn kho nhập hàng',
+                    ),
+                    items: _warehouses.map((warehouse) {
+                      return DropdownMenuItem<String>(
+                        value: warehouse.id,
+                        child: Text(
+                          warehouse.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: _isLoadingWarehouses || _warehouses.isEmpty
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _selectedWarehouseId = value;
+                            });
+                          },
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Vui lòng chọn kho nhập hàng';
+                      }
+                      return null;
                     },
                   ),
                   const SizedBox(height: 12),
@@ -325,8 +455,12 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                             hintText: 'VD: 36000',
                           ),
                           validator: (val) {
-                            if (val == null || val.trim().isEmpty) return 'Vui lòng nhập giá bán';
-                            if (int.tryParse(val.replaceAll(RegExp(r'[^0-9]'), '')) == null) {
+                            if (val == null || val.trim().isEmpty)
+                              return 'Vui lòng nhập giá bán';
+                            if (int.tryParse(
+                                  val.replaceAll(RegExp(r'[^0-9]'), ''),
+                                ) ==
+                                null) {
                               return 'Nhập số hợp lệ';
                             }
                             return null;
@@ -374,10 +508,16 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                             prefixIcon: Icon(Icons.shelves),
                           ),
                           items: _shelves
-                              .map((sh) => DropdownMenuItem(value: sh, child: Text('Kệ $sh')))
+                              .map(
+                                (sh) => DropdownMenuItem(
+                                  value: sh,
+                                  child: Text('Kệ $sh'),
+                                ),
+                              )
                               .toList(),
                           onChanged: (val) {
-                            if (val != null) setState(() => _selectedShelf = val);
+                            if (val != null)
+                              setState(() => _selectedShelf = val);
                           },
                         ),
                       ),
@@ -412,7 +552,10 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                     children: _presetImages
                         .map(
                           (preset) => ActionChip(
-                            avatar: const Icon(Icons.image_search_rounded, size: 16),
+                            avatar: const Icon(
+                              Icons.image_search_rounded,
+                              size: 16,
+                            ),
                             label: Text(preset['name']!),
                             onPressed: () {
                               setState(() {
@@ -430,7 +573,8 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Mô tả chi tiết sản phẩm',
                       prefixIcon: Icon(Icons.notes_rounded),
-                      hintText: 'Nhập xuất xứ, hạn sử dụng, hướng dẫn bảo quản...',
+                      hintText:
+                          'Nhập xuất xứ, hạn sử dụng, hướng dẫn bảo quản...',
                     ),
                   ),
                 ],
@@ -453,11 +597,19 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
                         )
-                      : const Icon(Icons.check_circle_rounded, color: Colors.white),
+                      : const Icon(
+                          Icons.check_circle_rounded,
+                          color: Colors.white,
+                        ),
                   label: Text(
-                    _isSubmitting ? 'ĐANG LƯU SẢN PHẨM...' : 'XÁC NHẬN THÊM VÀO KHO',
+                    _isSubmitting
+                        ? 'ĐANG LƯU SẢN PHẨM...'
+                        : 'XÁC NHẬN THÊM VÀO KHO',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,

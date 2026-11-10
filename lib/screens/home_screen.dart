@@ -807,10 +807,7 @@ class _PromoSlide extends StatelessWidget {
 }
 
 class _QuickCategories extends StatefulWidget {
-  const _QuickCategories({
-    required this.categories,
-    required this.onSelect,
-  });
+  const _QuickCategories({required this.categories, required this.onSelect});
 
   final List<ProductCategory> categories;
   final ValueChanged<ProductCategory> onSelect;
@@ -826,7 +823,9 @@ class _QuickCategoriesState extends State<_QuickCategories> {
   /// dựng các nút danh mục nhanh trên trang chủ.
   @override
   Widget build(BuildContext context) {
-    final categoryList = widget.categories.isNotEmpty ? widget.categories : sampleCategories;
+    final categoryList = widget.categories.isNotEmpty
+        ? widget.categories
+        : sampleCategories;
     return SizedBox(
       height: 112,
       child: ListView.separated(
