@@ -139,11 +139,11 @@ class ApiConstants {
   // NHÀ CUNG CẤP & PHIẾU NHẬP HÀNG TỪ NHÀ CUNG CẤP (ROLE: ADMIN / WAREHOUSE_MANAGER / KHO)
   // ---------------------------------------------------------------------------
 
-  /// GET /suppliers → danh sách nhà cung cấp được phép xem.
+  /// GET / POST /suppliers → danh sách & quản lý nhà cung cấp.
   static const String suppliers = '/suppliers';
 
-  /// GET / POST /admin/suppliers → quản lý & thêm nhà cung cấp mới (Admin).
-  static const String adminSuppliers = '/admin/suppliers';
+  /// Lối tắt hướng về /suppliers (Backend không dùng /admin/suppliers).
+  static const String adminSuppliers = '/suppliers';
 
   /// GET / POST /warehouse/goods-receipts → danh sách & tạo phiếu nhập kho mới.
   static const String warehouseGoodsReceipts = '/warehouse/goods-receipts';

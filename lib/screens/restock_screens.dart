@@ -44,7 +44,9 @@ class _CreateRestockRequestScreenState
   final Map<String, int> _selectedItems = {};
   bool _isSubmitting = false;
 
-  bool get _isStoreManager => widget.userRole == 'STORE_MANAGER';
+  /// Admin có quyền tương đương store_manager khi tạo phiếu yêu cầu.
+  bool get _isStoreManager =>
+      widget.userRole == 'STORE_MANAGER' || widget.userRole == 'ADMIN';
 
   @override
   void initState() {
@@ -609,7 +611,9 @@ class _RestockRequestsScreenState extends State<RestockRequestsScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
-  bool get _isStoreManager => widget.userRole == 'STORE_MANAGER';
+  /// Admin có quyền tương đương store_manager khi xem phiếu yêu cầu hàng.
+  bool get _isStoreManager =>
+      widget.userRole == 'STORE_MANAGER' || widget.userRole == 'ADMIN';
 
   static const _statusOptions = [
     {'value': 'ALL', 'label': 'Tất cả'},
@@ -1286,7 +1290,9 @@ class _RestockRequestDetailScreenState
   bool _isConfirming = false;
   String? _error;
 
-  bool get _isStoreManager => widget.userRole == 'STORE_MANAGER';
+  /// Admin có quyền tương đương store_manager khi xem chi tiết phiếu yêu cầu.
+  bool get _isStoreManager =>
+      widget.userRole == 'STORE_MANAGER' || widget.userRole == 'ADMIN';
 
   @override
   void initState() {
@@ -1714,13 +1720,15 @@ class _RestockRequestDetailScreenState
   }
 }
 
-/// Kiểm tra role có phải Quản lý kho (kho_manager / WAREHOUSE_MANAGER)
+/// Kiểm tra role có phải Quản lý kho (kho_manager / WAREHOUSE_MANAGER) hoặc Admin.
+/// Admin là role cao nhất và được phép truy cập tất cả chức năng Quản lý Kho.
 bool isWarehouseManagerRole(String? role) {
   final clean = (role ?? '').trim().toUpperCase();
   return clean == 'WAREHOUSE_MANAGER' ||
       clean == 'KHO_MANAGER' ||
       clean == 'KHO_QUAN_LY' ||
-      clean == 'QUAN_LY_KHO';
+      clean == 'QUAN_LY_KHO' ||
+      clean == 'ADMIN';
 }
 
 /// Định dạng lỗi API theo chuẩn HTTP Status Code cho màn hình phiếu kho

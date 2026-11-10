@@ -160,7 +160,9 @@ class _StoreStaffWorkspaceState extends State<StoreStaffWorkspace> {
     'Tài khoản',
   ];
 
-  bool get _isStoreManager => widget.userRole == 'STORE_MANAGER';
+  /// Admin được coi như store_manager khi truy cập giao diện cửa hàng.
+  bool get _isStoreManager =>
+      widget.userRole == 'STORE_MANAGER' || widget.userRole == 'ADMIN';
 
   @override
   Widget build(BuildContext context) {
@@ -1386,7 +1388,9 @@ class _StoreProductsScreenState extends State<_StoreProductsScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
-  bool get _isStoreManager => widget.userRole == 'STORE_MANAGER';
+  /// Admin được coi như store_manager — hiển thị nút yêu cầu hàng và xem phiếu.
+  bool get _isStoreManager =>
+      widget.userRole == 'STORE_MANAGER' || widget.userRole == 'ADMIN';
 
   @override
   void initState() {

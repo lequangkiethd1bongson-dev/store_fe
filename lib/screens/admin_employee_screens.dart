@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../features/suppliers/screens/supplier_list_screen.dart';
 import '../models/employee_management_models.dart';
 import '../models/store_models.dart';
 import '../services/employee_management_service.dart';
@@ -822,7 +823,7 @@ class _AdminQuickFunctionGrid extends StatelessWidget {
         () {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => const SupplierManagementScreen(userRole: 'ADMIN'),
+              builder: (_) => const SupplierListScreen(userRole: 'ADMIN'),
             ),
           );
         },
@@ -1346,7 +1347,7 @@ class AdminFunctionsMenuScreen extends StatelessWidget {
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => const SupplierManagementScreen(
+                builder: (_) => const SupplierListScreen(
                   userRole: 'ADMIN',
                 ),
               ),

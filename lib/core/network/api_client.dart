@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../constants/api_constants.dart';
@@ -69,6 +70,15 @@ class ApiClient {
       });
     if (body != null) request.body = jsonEncode(body);
 
+    final timestamp = DateTime.now().toIso8601String();
+    final relativePath = uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path;
+
+    // Logging tạm thời theo yêu cầu (không ghi host, token, password hoặc secrets)
+    debugPrint('[API REQUEST] [$timestamp] $method $relativePath');
+    if (body != null) {
+      debugPrint('[API REQUEST BODY] ${jsonEncode(body)}');
+    }
+
     final http.Response response;
     try {
       final streamed = await _client
@@ -76,8 +86,10 @@ class ApiClient {
           .timeout(ApiConstants.timeout);
       response = await http.Response.fromStream(streamed);
     } on TimeoutException {
+      debugPrint('[API ERROR] [$timestamp] $method $relativePath -> TimeoutException');
       throw const ApiException('Máy chủ phản hồi quá lâu, vui lòng thử lại.');
-    } on http.ClientException {
+    } on http.ClientException catch (e) {
+      debugPrint('[API ERROR] [$timestamp] $method $relativePath -> ClientException: $e');
       // http 1.x gói cả lỗi socket (sai ip, backend chưa chạy) vào đây.
       throw const ApiException('Không kết nối được máy chủ.');
     }
@@ -85,6 +97,9 @@ class ApiClient {
     // giải mã theo utf-8 để không lỗi tiếng việt có dấu.
     final text = utf8.decode(response.bodyBytes);
     final dynamic data = text.isEmpty ? null : _tryDecode(text);
+
+    debugPrint('[API RESPONSE] [$timestamp] HTTP ${response.statusCode} $relativePath');
+    debugPrint('[API RESPONSE BODY] $text');
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return data;

@@ -11,6 +11,7 @@ import 'services/auth_service.dart';
 
 import 'data/sample_data.dart';
 import 'models/store_models.dart';
+import 'features/suppliers/screens/supplier_list_screen.dart';
 import 'screens/admin_employee_screens.dart';
 import 'screens/cart_checkout_screens.dart';
 import 'screens/catalog_screens.dart';
@@ -137,6 +138,7 @@ class _SmartMartAppState extends State<SmartMartApp> {
       homeWidget = AdminWorkspaceScreen(
         userName: _userName,
         userEmail: _userEmail,
+        staffController: _staffController,
         onLogout: () => _updateSession(null, null),
       );
     } else {
@@ -339,12 +341,14 @@ class AdminWorkspaceScreen extends StatefulWidget {
   const AdminWorkspaceScreen({
     required this.userName,
     required this.userEmail,
+    required this.staffController,
     required this.onLogout,
     super.key,
   });
 
   final String userName;
   final String userEmail;
+  final StaffController staffController;
   final VoidCallback onLogout;
 
   @override
@@ -387,7 +391,7 @@ class _AdminWorkspaceScreenState extends State<AdminWorkspaceScreen> {
                 Navigator.of(dialogCtx).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => const SupplierManagementScreen(
+                    builder: (_) => const SupplierListScreen(
                       userRole: 'ADMIN',
                     ),
                   ),
