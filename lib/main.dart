@@ -11,15 +11,12 @@ import 'services/auth_service.dart';
 
 import 'data/sample_data.dart';
 import 'models/store_models.dart';
-import 'features/suppliers/screens/supplier_list_screen.dart';
+import 'screens/admin_employee_screens.dart';
 import 'screens/cart_checkout_screens.dart';
 import 'screens/catalog_screens.dart';
-import 'screens/goods_receipt_screens.dart';
 import 'screens/home_screen.dart';
-import 'screens/kho_addproduct.dart';
 import 'screens/login_screen.dart';
 import 'screens/profile_order_screens.dart';
-import 'screens/restock_screens.dart';
 import 'screens/staff_screens.dart';
 import 'state/staff_controller.dart';
 import 'state/store_controller.dart';
@@ -31,11 +28,11 @@ Future<void> main() async {
 
   const supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://aaelclxxsknskpeqasfj.supabase.co',
+    defaultValue: 'https://imtbcjdrnvjbmdxvnunh.supabase.co',
   );
   const publishableKey = String.fromEnvironment(
     'SUPABASE_PUBLISHABLE_KEY',
-    defaultValue: 'sb_publishable_fGGwRPSnIamIZrUqSLtHuQ_eLJ8sonf',
+    defaultValue: 'sb_publishable_c8SigvWlTEVgHb4uBjhe3Q_HjmmTjPO',
   );
 
   await Supabase.initialize(url: supabaseUrl, publishableKey: publishableKey);
@@ -334,7 +331,8 @@ class _SmartMartAppState extends State<SmartMartApp> {
 }
 
 /// Màn hình Không gian làm việc Quản trị viên (Admin Workspace)
-class AdminWorkspaceScreen extends StatelessWidget {
+/// Giao diện gồm 4 tab điều hướng: Trang chủ, Chức năng (5 phân hệ lớn), Cửa hàng, Cá nhân
+class AdminWorkspaceScreen extends StatefulWidget {
   const AdminWorkspaceScreen({
     required this.userName,
     required this.userEmail,
@@ -349,45 +347,260 @@ class AdminWorkspaceScreen extends StatelessWidget {
   final VoidCallback onLogout;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        title: const Text('Quản trị viên hệ thống'),
-        actions: [
-          IconButton(
-            tooltip: 'Đăng xuất',
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout_rounded),
+  State<AdminWorkspaceScreen> createState() => _AdminWorkspaceScreenState();
+}
+
+class _AdminWorkspaceScreenState extends State<AdminWorkspaceScreen> {
+  int _selectedTab = 0;
+
+  Future<void> _showAdminSideMenu() async {
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Đóng menu Admin',
+      barrierColor: AppColors.blue900.withValues(alpha: 0.32),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (context, animation, secondaryAnimation) => Align(
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: 2 / 3,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: _AdminSideMenu(
+              userName: widget.userName,
+              userEmail: widget.userEmail,
+              onSelectTab: (index) {
+                Navigator.of(context).pop();
+                setState(() => _selectedTab = index);
+              },
+              onLogout: () {
+                Navigator.of(context).pop();
+                widget.onLogout();
+              },
+            ),
           ),
-        ],
+        ),
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(-1, 0),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+            ),
+            child: child,
+          ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = <Widget>[
+      AdminHomeScreen(
+        userName: widget.userName,
+        userEmail: widget.userEmail,
+        staffController: widget.staffController,
+        onOpenMenu: _showAdminSideMenu,
+        onSelectBottomTab: (tab) => setState(() => _selectedTab = tab),
+        onLogout: widget.onLogout,
+      ),
+      AdminFunctionsMenuScreen(
+        userName: widget.userName,
+        staffController: widget.staffController,
+        onSelectBottomTab: (tab) => setState(() => _selectedTab = tab),
+      ),
+      AdminStoresTabScreen(
+        userName: widget.userName,
+        staffController: widget.staffController,
+      ),
+      AdminPersonalProfileScreen(
+        userName: widget.userName,
+        userEmail: widget.userEmail,
+        onLogout: widget.onLogout,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 640;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: isWide ? 480 : double.infinity,
+            ),
+            child: AnnotatedRegion<SystemUiOverlayStyle>(
+              value: const SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.light,
+                statusBarBrightness: Brightness.dark,
+              ),
+              child: Scaffold(
+                backgroundColor: AppColors.canvas,
+                extendBody: true,
+                body: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: IndexedStack(index: _selectedTab, children: pages),
+                ),
+                bottomNavigationBar: SafeArea(
+                  top: false,
+                  minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: _AdminGlassBottomNavigation(
+                    currentIndex: _selectedTab,
+                    onTap: (index) => setState(() => _selectedTab = index),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AdminGlassBottomNavigation extends StatelessWidget {
+  const _AdminGlassBottomNavigation({
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  static const _items = <(IconData, IconData, String, int)>[
+    (Icons.home_outlined, Icons.home_rounded, 'Trang chủ', 0),
+    (Icons.apps_outlined, Icons.apps_rounded, 'Chức năng', 1),
+    (Icons.storefront_outlined, Icons.storefront_rounded, 'Cửa hàng', 2),
+    (Icons.person_outline_rounded, Icons.person_rounded, 'Cá nhân', 3),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      key: const ValueKey('admin-glass-bottom-navigation'),
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          height: 68,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.94)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.blue900.withValues(alpha: 0.14),
+                blurRadius: 22,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: List.generate(_items.length, (index) {
+              final item = _items[index];
+              final selected = item.$4 == currentIndex;
+              final icon = selected ? item.$2 : item.$1;
+              return Expanded(
+                child: Semantics(
+                  button: true,
+                  selected: selected,
+                  label: item.$3,
+                  child: InkWell(
+                    key: ValueKey('admin-tab-$index'),
+                    onTap: () => onTap(item.$4),
+                    child: Center(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AppColors.blue700.withValues(alpha: 0.16)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              icon,
+                              size: 23,
+                              color: selected
+                                  ? AppColors.blue700
+                                  : AppColors.blue800,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.$3,
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: selected
+                                    ? AppColors.blue700
+                                    : AppColors.blue900,
+                                fontSize: 10,
+                                fontWeight: selected
+                                    ? FontWeight.w800
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminSideMenu extends StatelessWidget {
+  const _AdminSideMenu({
+    required this.userName,
+    required this.userEmail,
+    required this.onSelectTab,
+    required this.onLogout,
+  });
+
+  final String userName;
+  final String userEmail;
+  final ValueChanged<int> onSelectTab;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Header: Thông tin Admin ────────────────────────────────
             Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
+              padding: const EdgeInsets.fromLTRB(18, 28, 18, 22),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
                   colors: [AppColors.blue900, AppColors.blue700],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.blue900.withValues(alpha: 0.18),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
-                    radius: 28,
+                    radius: 32,
                     backgroundColor: Colors.white.withValues(alpha: 0.2),
                     child: const Icon(
                       Icons.admin_panel_settings_rounded,
@@ -395,277 +608,75 @@ class AdminWorkspaceScreen extends StatelessWidget {
                       size: 32,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'QUẢN TRỊ VIÊN (ADMIN)',
-                          style: TextStyle(
-                            color: Color(0xFFCBE4FF),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          userName.isNotEmpty ? userName : 'Quản trị viên',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          userEmail,
-                          style: const TextStyle(
-                            color: Color(0xFFDCEBFA),
-                            fontSize: 11,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                  const SizedBox(height: 12),
+                  Text(
+                    userName.isNotEmpty ? userName : 'Quản trị viên',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    userEmail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFD6E8FF),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'QUẢN TRỊ VIÊN TOÀN HỆ THỐNG SSM4',
+                    style: TextStyle(
+                      color: Color(0xFFFFD58A),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.6,
                     ),
                   ),
                 ],
               ),
             ),
-
-            // ── Section: Quản lý Kho ──────────────────────────────────
-            const SizedBox(height: 20),
-            const _AdminSectionHeader(title: 'Quản lý Kho'),
             const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.inventory_2_rounded,
-              title: 'Phiếu nhập hàng từ NCC',
-              subtitle: 'Xem tất cả phiếu nhập toàn hệ thống, theo dõi tiến độ',
-              tint: const Color(0xFFF0FDF4),
-              iconColor: const Color(0xFF15803D),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const GoodsReceiptsScreen(userRole: 'ADMIN'),
-              )),
+            _SideMenuItem(
+              icon: Icons.home_outlined,
+              title: 'Trang chủ Dashboard',
+              onTap: () => onSelectTab(0),
             ),
-            const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.add_circle_outline_rounded,
-              title: 'Tạo phiếu nhập kho mới',
-              subtitle: 'Lập phiếu nhập hàng từ nhà cung cấp vào kho được chọn',
-              tint: const Color(0xFFFFFBEB),
-              iconColor: const Color(0xFFB45309),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) =>
-                    const CreateGoodsReceiptScreen(userRole: 'ADMIN'),
-              )),
+            _SideMenuItem(
+              icon: Icons.apps_rounded,
+              title: '5 Chức năng quản trị',
+              onTap: () => onSelectTab(1),
             ),
-            const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.assignment_turned_in_rounded,
-              title: 'Phiếu yêu cầu từ cửa hàng',
-              subtitle: 'Duyệt, từ chối và xuất hàng cho các cửa hàng',
-              tint: AppColors.blue50,
-              iconColor: AppColors.blue700,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const WarehouseRestockRequestsScreen(
-                  userRole: 'ADMIN',
+            _SideMenuItem(
+              icon: Icons.storefront_outlined,
+              title: 'Quản lý Cửa hàng',
+              onTap: () => onSelectTab(2),
+            ),
+            _SideMenuItem(
+              icon: Icons.person_outline_rounded,
+              title: 'Hồ sơ Cá nhân Admin',
+              onTap: () => onSelectTab(3),
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  side: BorderSide(color: Colors.red.shade200),
                 ),
-              )),
-            ),
-            const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.warehouse_rounded,
-              title: 'Giao diện kho đầy đủ',
-              subtitle:
-                  'Toàn bộ chức năng nhân viên kho: tồn kho, nhập kho, chuyển kệ',
-              tint: const Color(0xFFECFDF5),
-              iconColor: const Color(0xFF059669),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => WarehouseStaffWorkspace(
-                  controller: staffController,
-                  staffName: userName,
-                  userRole: 'ADMIN',
-                  onExit: () => Navigator.of(context).pop(),
-                ),
-              )),
-            ),
-            const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.add_box_rounded,
-              title: 'Thêm sản phẩm mới',
-              subtitle: 'Tạo sản phẩm mới và chọn kho nhập vào hệ thống',
-              tint: const Color(0xFFF8FAFC),
-              iconColor: AppColors.blue900,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) =>
-                    KhoAddProductScreen(controller: staffController),
-              )),
-            ),
-
-            // ── Section: Quản lý Cửa hàng ────────────────────────────
-            const SizedBox(height: 20),
-            const _AdminSectionHeader(title: 'Quản lý Cửa hàng'),
-            const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.storefront_rounded,
-              title: 'Giao diện cửa hàng đầy đủ',
-              subtitle:
-                  'Toàn bộ chức năng cửa hàng: bán hàng POS, tồn kệ, yêu cầu hàng',
-              tint: const Color(0xFFFFF7ED),
-              iconColor: const Color(0xFFEA580C),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => StoreStaffWorkspace(
-                  controller: staffController,
-                  staffName: userName,
-                  userRole: 'ADMIN',
-                  onExit: () => Navigator.of(context).pop(),
-                ),
-              )),
-            ),
-            const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.assignment_outlined,
-              title: 'Phiếu yêu cầu hàng của cửa hàng',
-              subtitle: 'Xem danh sách phiếu yêu cầu xuất hàng từ kho',
-              tint: const Color(0xFFFFF7ED),
-              iconColor: const Color(0xFFEA580C),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) =>
-                    const RestockRequestsScreen(userRole: 'ADMIN'),
-              )),
-            ),
-            const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.add_shopping_cart_rounded,
-              title: 'Tạo phiếu yêu cầu hàng',
-              subtitle: 'Lập phiếu yêu cầu xuất hàng từ kho cho cửa hàng',
-              tint: const Color(0xFFFFF7ED),
-              iconColor: const Color(0xFFEA580C),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) =>
-                    const CreateRestockRequestScreen(userRole: 'ADMIN'),
-              )),
-            ),
-
-            // ── Section: Quản lý Nhà cung cấp ────────────────────────
-            const SizedBox(height: 20),
-            const _AdminSectionHeader(title: 'Quản lý Nhà cung cấp'),
-            const SizedBox(height: 10),
-            _AdminActionCard(
-              icon: Icons.business_rounded,
-              title: 'Nhà cung cấp',
-              subtitle:
-                  'Xem, thêm, sửa, kích hoạt/ngừng hoạt động nhà cung cấp',
-              tint: const Color(0xFFEFF6FF),
-              iconColor: AppColors.blue700,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const SupplierListScreen(userRole: 'ADMIN'),
-              )),
-            ),
-
-            // ── Nút đăng xuất ────────────────────────────────────────
-            const SizedBox(height: 28),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red[700],
-                side: BorderSide(color: Colors.red.shade200),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                onPressed: onLogout,
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('Đăng xuất tài khoản'),
               ),
-              onPressed: onLogout,
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Đăng xuất tài khoản Admin'),
             ),
-            const SizedBox(height: 16),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _AdminActionCard extends StatelessWidget {
-  const _AdminActionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.tint,
-    required this.iconColor,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color tint;
-  final Color iconColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.line),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: tint,
-                child: Icon(icon, color: iconColor, size: 24),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.muted,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Widget tiêu đề phân đoạn trong menu Admin.
-class _AdminSectionHeader extends StatelessWidget {
-  const _AdminSectionHeader({required this.title});
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
     );
   }
 }
@@ -1329,7 +1340,6 @@ class _SideMenuItem extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
-    super.key,
   });
 
   final IconData icon;

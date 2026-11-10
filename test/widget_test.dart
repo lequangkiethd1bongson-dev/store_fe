@@ -9,7 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:smartmart_frontend/data/sample_data.dart';
 import 'package:smartmart_frontend/main.dart';
+import 'package:smartmart_frontend/state/staff_controller.dart';
 
 Future<void> _pumpReadyApp(WidgetTester tester) async {
   SharedPreferences.setMockInitialValues({
@@ -598,6 +600,52 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Thịt cá'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('AdminWorkspaceScreen displays 4 bottom tabs and 5 big modules', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 915);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final staffController = StaffController(products: sampleProducts);
+    addTearDown(staffController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AdminWorkspaceScreen(
+          userName: 'Nguyễn Minh Quân',
+          userEmail: 'admin@ssm4.vn',
+          staffController: staffController,
+          onLogout: () {},
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    // Verify 4 bottom navigation tabs: Trang chủ, Chức năng, Cửa hàng, Cá nhân
+    expect(
+      find.byKey(const ValueKey('admin-glass-bottom-navigation')),
+      findsOneWidget,
+    );
+    expect(find.text('Trang chủ'), findsWidgets);
+    expect(find.text('Chức năng'), findsWidgets);
+    expect(find.text('Cửa hàng'), findsWidgets);
+    expect(find.text('Cá nhân'), findsWidgets);
+
+    // Switch to tab "Chức năng" (index 1) and verify 5 big functions
+    await tester.tap(find.byKey(const ValueKey('admin-tab-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('5 Phân hệ Quản lý Trọng tâm'), findsOneWidget);
+    expect(find.text('Quản lý Kho hàng'), findsOneWidget);
+    expect(find.text('Quản lý Cửa hàng'), findsWidgets);
+    expect(find.text('Quản lý Nhà cung cấp'), findsOneWidget);
+    expect(find.text('Quản lý Nhân viên'), findsOneWidget);
+    expect(find.text('Quản lý Thống kê'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

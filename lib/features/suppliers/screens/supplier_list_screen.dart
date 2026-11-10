@@ -133,9 +133,81 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
             final filtered = _controller.filteredSuppliers;
             final isLoading = _controller.isLoading;
             final error = _controller.error;
+            final totalCount = filtered.length;
+            final activeCount = filtered.where((s) => s.isActive).length;
+            final inactiveCount = totalCount - activeCount;
 
             return Column(
               children: [
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.blue900, AppColors.blue700],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.blue900.withValues(alpha: 0.14),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.business_rounded,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'ĐỐI TÁC CUNG ỨNG SSM4',
+                              style: TextStyle(
+                                color: Color(0xFFFFD58A),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '$totalCount Nhà cung cấp hiển thị',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Đang hợp tác: $activeCount • Tạm ngưng: $inactiveCount',
+                              style: const TextStyle(
+                                color: Color(0xFFDCEBFA),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 SupplierSearchBar(
                   searchQuery: _controller.searchQuery,
                   onSearchChanged: (query) {
