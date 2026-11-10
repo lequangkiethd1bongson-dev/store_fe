@@ -16,8 +16,10 @@ import 'screens/cart_checkout_screens.dart';
 import 'screens/catalog_screens.dart';
 import 'screens/goods_receipt_screens.dart';
 import 'screens/home_screen.dart';
+import 'screens/kho_addproduct.dart';
 import 'screens/login_screen.dart';
 import 'screens/profile_order_screens.dart';
+import 'screens/restock_screens.dart';
 import 'screens/staff_screens.dart';
 import 'state/staff_controller.dart';
 import 'state/store_controller.dart';
@@ -137,6 +139,7 @@ class _SmartMartAppState extends State<SmartMartApp> {
       homeWidget = AdminWorkspaceScreen(
         userName: _userName,
         userEmail: _userEmail,
+        staffController: _staffController,
         onLogout: () => _updateSession(null, null),
       );
     } else {
@@ -335,12 +338,14 @@ class AdminWorkspaceScreen extends StatelessWidget {
   const AdminWorkspaceScreen({
     required this.userName,
     required this.userEmail,
+    required this.staffController,
     required this.onLogout,
     super.key,
   });
 
   final String userName;
   final String userEmail;
+  final StaffController staffController;
   final VoidCallback onLogout;
 
   @override
@@ -361,6 +366,7 @@ class AdminWorkspaceScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // ── Header: Thông tin Admin ────────────────────────────────
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -428,44 +434,20 @@ class AdminWorkspaceScreen extends StatelessWidget {
                 ],
               ),
             ),
+
+            // ── Section: Quản lý Kho ──────────────────────────────────
             const SizedBox(height: 20),
-            const Text(
-              'Chức năng quản trị',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            _AdminActionCard(
-              icon: Icons.business_rounded,
-              title: 'Quản lý Nhà cung cấp',
-              subtitle: 'Xem danh sách, tìm kiếm và quản lý nhà cung cấp',
-              tint: const Color(0xFFEFF6FF),
-              iconColor: AppColors.blue700,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const SupplierListScreen(
-                      userRole: 'ADMIN',
-                    ),
-                  ),
-                );
-              },
-            ),
+            const _AdminSectionHeader(title: 'Quản lý Kho'),
             const SizedBox(height: 10),
             _AdminActionCard(
               icon: Icons.inventory_2_rounded,
-              title: 'Nhập hàng từ Nhà cung cấp',
+              title: 'Phiếu nhập hàng từ NCC',
               subtitle: 'Xem tất cả phiếu nhập toàn hệ thống, theo dõi tiến độ',
               tint: const Color(0xFFF0FDF4),
               iconColor: const Color(0xFF15803D),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const GoodsReceiptsScreen(
-                      userRole: 'ADMIN',
-                    ),
-                  ),
-                );
-              },
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const GoodsReceiptsScreen(userRole: 'ADMIN'),
+              )),
             ),
             const SizedBox(height: 10),
             _AdminActionCard(
@@ -474,17 +456,117 @@ class AdminWorkspaceScreen extends StatelessWidget {
               subtitle: 'Lập phiếu nhập hàng từ nhà cung cấp vào kho được chọn',
               tint: const Color(0xFFFFFBEB),
               iconColor: const Color(0xFFB45309),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CreateGoodsReceiptScreen(
-                      userRole: 'ADMIN',
-                    ),
-                  ),
-                );
-              },
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) =>
+                    const CreateGoodsReceiptScreen(userRole: 'ADMIN'),
+              )),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 10),
+            _AdminActionCard(
+              icon: Icons.assignment_turned_in_rounded,
+              title: 'Phiếu yêu cầu từ cửa hàng',
+              subtitle: 'Duyệt, từ chối và xuất hàng cho các cửa hàng',
+              tint: AppColors.blue50,
+              iconColor: AppColors.blue700,
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const WarehouseRestockRequestsScreen(
+                  userRole: 'ADMIN',
+                ),
+              )),
+            ),
+            const SizedBox(height: 10),
+            _AdminActionCard(
+              icon: Icons.warehouse_rounded,
+              title: 'Giao diện kho đầy đủ',
+              subtitle:
+                  'Toàn bộ chức năng nhân viên kho: tồn kho, nhập kho, chuyển kệ',
+              tint: const Color(0xFFECFDF5),
+              iconColor: const Color(0xFF059669),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => WarehouseStaffWorkspace(
+                  controller: staffController,
+                  staffName: userName,
+                  userRole: 'ADMIN',
+                  onExit: () => Navigator.of(context).pop(),
+                ),
+              )),
+            ),
+            const SizedBox(height: 10),
+            _AdminActionCard(
+              icon: Icons.add_box_rounded,
+              title: 'Thêm sản phẩm mới',
+              subtitle: 'Tạo sản phẩm mới và chọn kho nhập vào hệ thống',
+              tint: const Color(0xFFF8FAFC),
+              iconColor: AppColors.blue900,
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) =>
+                    KhoAddProductScreen(controller: staffController),
+              )),
+            ),
+
+            // ── Section: Quản lý Cửa hàng ────────────────────────────
+            const SizedBox(height: 20),
+            const _AdminSectionHeader(title: 'Quản lý Cửa hàng'),
+            const SizedBox(height: 10),
+            _AdminActionCard(
+              icon: Icons.storefront_rounded,
+              title: 'Giao diện cửa hàng đầy đủ',
+              subtitle:
+                  'Toàn bộ chức năng cửa hàng: bán hàng POS, tồn kệ, yêu cầu hàng',
+              tint: const Color(0xFFFFF7ED),
+              iconColor: const Color(0xFFEA580C),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => StoreStaffWorkspace(
+                  controller: staffController,
+                  staffName: userName,
+                  userRole: 'ADMIN',
+                  onExit: () => Navigator.of(context).pop(),
+                ),
+              )),
+            ),
+            const SizedBox(height: 10),
+            _AdminActionCard(
+              icon: Icons.assignment_outlined,
+              title: 'Phiếu yêu cầu hàng của cửa hàng',
+              subtitle: 'Xem danh sách phiếu yêu cầu xuất hàng từ kho',
+              tint: const Color(0xFFFFF7ED),
+              iconColor: const Color(0xFFEA580C),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) =>
+                    const RestockRequestsScreen(userRole: 'ADMIN'),
+              )),
+            ),
+            const SizedBox(height: 10),
+            _AdminActionCard(
+              icon: Icons.add_shopping_cart_rounded,
+              title: 'Tạo phiếu yêu cầu hàng',
+              subtitle: 'Lập phiếu yêu cầu xuất hàng từ kho cho cửa hàng',
+              tint: const Color(0xFFFFF7ED),
+              iconColor: const Color(0xFFEA580C),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) =>
+                    const CreateRestockRequestScreen(userRole: 'ADMIN'),
+              )),
+            ),
+
+            // ── Section: Quản lý Nhà cung cấp ────────────────────────
+            const SizedBox(height: 20),
+            const _AdminSectionHeader(title: 'Quản lý Nhà cung cấp'),
+            const SizedBox(height: 10),
+            _AdminActionCard(
+              icon: Icons.business_rounded,
+              title: 'Nhà cung cấp',
+              subtitle:
+                  'Xem, thêm, sửa, kích hoạt/ngừng hoạt động nhà cung cấp',
+              tint: const Color(0xFFEFF6FF),
+              iconColor: AppColors.blue700,
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const SupplierListScreen(userRole: 'ADMIN'),
+              )),
+            ),
+
+            // ── Nút đăng xuất ────────────────────────────────────────
+            const SizedBox(height: 28),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.red[700],
@@ -495,6 +577,7 @@ class AdminWorkspaceScreen extends StatelessWidget {
               icon: const Icon(Icons.logout_rounded),
               label: const Text('Đăng xuất tài khoản Admin'),
             ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -569,6 +652,20 @@ class _AdminActionCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Widget tiêu đề phân đoạn trong menu Admin.
+class _AdminSectionHeader extends StatelessWidget {
+  const _AdminSectionHeader({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
     );
   }
 }
