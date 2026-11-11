@@ -223,7 +223,7 @@ class _StoreStaffWorkspaceState extends State<StoreStaffWorkspace> {
                         title: const Text('Tạo tài khoản NV Bán hàng'),
                       ),
                       body: const AdminCreateEmployeeScreen(
-                        currentUserRole: 'STORE_MANAGER',
+                        embedded: true,
                       ),
                     ),
                   ),
@@ -452,7 +452,7 @@ class _WarehouseStaffWorkspaceState extends State<WarehouseStaffWorkspace> {
                         title: const Text('Tạo tài khoản NV Kho'),
                       ),
                       body: const AdminCreateEmployeeScreen(
-                        currentUserRole: 'WAREHOUSE_MANAGER',
+                        embedded: true,
                       ),
                     ),
                   ),
@@ -3624,14 +3624,8 @@ class _StaffProfileScreenState extends State<_StaffProfileScreen> {
                               : 'Tạo tài khoản NV Bán hàng',
                         ),
                       ),
-                      body: AdminCreateEmployeeScreen(
-                        currentUserRole: isKho
-                            ? 'WAREHOUSE_MANAGER'
-                            : 'STORE_MANAGER',
-                        assignedStoreId: _currentProfile?.storeId,
-                        assignedStoreName: _branchName,
-                        assignedWarehouseId: _currentProfile?.warehouseId,
-                        assignedWarehouseName: _branchName,
+                      body: const AdminCreateEmployeeScreen(
+                        embedded: true,
                       ),
                     ),
                   ),

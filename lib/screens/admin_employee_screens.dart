@@ -3790,15 +3790,42 @@ class AdminCreateEmployeeScreen extends StatefulWidget {
 }
 
 class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
+  final EmployeeManagementService _service = EmployeeManagementService();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController(text: '123456');
 
   String _selectedRole = 'sales';
-  String _selectedBranch = 'Cửa hàng SSM4 - Quận 1';
+  List<BranchLocation> _stores = [];
+  List<BranchLocation> _warehouses = [];
+  String? _selectedStoreId;
+  String? _selectedWarehouseId;
+
   bool _obscurePassword = true;
   bool _activateImmediately = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBranches();
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      final stores = await _service.getStores();
+      final warehouses = await _service.getWarehouses();
+      if (!mounted) return;
+      setState(() {
+        _stores = stores;
+        _warehouses = warehouses;
+        if (stores.isNotEmpty) _selectedStoreId = stores.first.id;
+        if (warehouses.isNotEmpty) _selectedWarehouseId = warehouses.first.id;
+      });
+    } catch (e) {
+      debugPrint('Lỗi tải danh sách cơ sở: $e');
+    }
+  }
 
   static const _storeBranches = <String>[
     'Cửa hàng SSM4 - Quận 1',
@@ -3811,24 +3838,26 @@ class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
     'Kho Tổng Nam Sài Gòn (Q7)',
   ];
 
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
-    _phoneCtrl.dispose();
-    _passwordCtrl.dispose();
-    super.dispose();
-  }
+  String _selectedBranch = 'Cửa hàng SSM4 - Quận 1';
 
   List<String> get _currentBranches {
     if (_selectedRole == 'kho_manager' || _selectedRole == 'kho') {
-      return _warehouseBranches;
+      return _warehouses.isNotEmpty
+          ? _warehouses.map((w) => w.name).toList()
+          : _warehouseBranches;
     }
-    return _storeBranches;
+    return _stores.isNotEmpty
+        ? _stores.map((s) => s.name).toList()
+        : _storeBranches;
   }
 
-  void _handlePreviewSubmit() {
-    if (_nameCtrl.text.trim().isEmpty || _emailCtrl.text.trim().isEmpty) {
+  Future<void> _handlePreviewSubmit() async {
+    final name = _nameCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    final password = _passwordCtrl.text.trim();
+
+    if (name.isEmpty || email.isEmpty) {
       showSmartMartNotice(
         context,
         message: 'Vui lòng nhập đầy đủ Họ tên và Email nhân viên.',
@@ -3836,12 +3865,55 @@ class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
       );
       return;
     }
-    showSmartMartNotice(
-      context,
-      message:
-          'Đã ghi nhận biểu mẫu tạo tài khoản cho ${_nameCtrl.text.trim()} (${EmployeeRecord.labelForRole(_selectedRole)}).',
-      icon: Icons.person_add_alt_1_rounded,
-    );
+    if (password.length < 6) {
+      showSmartMartNotice(
+        context,
+        message: 'Mật khẩu cần tối thiểu 6 ký tự.',
+        icon: Icons.error_outline_rounded,
+      );
+      return;
+    }
+
+    try {
+      final isWarehouse = _selectedRole == 'kho' || _selectedRole == 'kho_manager';
+      final isStore = _selectedRole == 'sales' || _selectedRole == 'store_manager';
+
+      BranchLocation? storeObj = _stores.where((s) => s.name == _selectedBranch).firstOrNull ?? _stores.firstOrNull;
+      BranchLocation? whObj = _warehouses.where((w) => w.name == _selectedBranch).firstOrNull ?? _warehouses.firstOrNull;
+
+      final created = await _service.createEmployee(
+        fullName: name,
+        email: email,
+        phone: phone.isEmpty ? '0900000000' : phone,
+        password: password,
+        role: _selectedRole,
+        storeId: isStore ? (storeObj?.id ?? 'store-q1') : null,
+        storeName: isStore ? (storeObj?.name ?? _selectedBranch) : null,
+        warehouseId: isWarehouse ? (whObj?.id ?? 'wh-thuduc') : null,
+        warehouseName: isWarehouse ? (whObj?.name ?? _selectedBranch) : null,
+        isActive: _activateImmediately,
+        creatorRole: 'ADMIN',
+      );
+
+      if (!mounted) return;
+      _nameCtrl.clear();
+      _emailCtrl.clear();
+      _phoneCtrl.clear();
+      _passwordCtrl.text = '123456';
+
+      showSmartMartNotice(
+        context,
+        message: 'Đã tạo và lưu thành công tài khoản "${created.fullName}" (${created.roleLabel}) vào Supabase!',
+        icon: Icons.check_circle_rounded,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSmartMartNotice(
+        context,
+        message: 'Không thể lưu tài khoản vào Supabase: $e',
+        icon: Icons.error_outline_rounded,
+      );
+    }
   }
 
   @override

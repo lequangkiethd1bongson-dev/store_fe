@@ -127,13 +127,7 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
 
     final controller = widget.controller;
     if (controller != null) {
-      final index = controller.products.indexWhere(
-        (p) => p.id == updatedProduct.id,
-      );
-      if (index != -1) {
-        controller.products[index] = updatedProduct;
-        controller.notifyListeners();
-      }
+      controller.addProduct(updatedProduct);
     }
 
     if (widget.onProductUpdated != null) {
@@ -179,8 +173,7 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
 
     final controller = widget.controller;
     if (controller != null) {
-      controller.products.removeWhere((p) => p.id == widget.product.id);
-      controller.notifyListeners();
+      controller.removeProduct(widget.product.id);
     }
 
     if (widget.onProductDeleted != null) {

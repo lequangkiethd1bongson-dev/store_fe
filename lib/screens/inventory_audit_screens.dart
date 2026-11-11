@@ -99,7 +99,7 @@ class _BalanceReportTab extends StatelessWidget {
                     _metricColumn('Đầu kỳ', '${item.openingStock}'),
                     _metricColumn('Nhập (+)', '${item.imported}', Colors.green),
                     _metricColumn('Xuất (-)', '${item.exported}', Colors.orange),
-                    _metricColumn('Cuối kỳ', '${item.closingStock}', Colors.blue, isBold: true),
+                    _metricColumn('Cuối kỳ', '${item.closingStock}', Colors.blue, true),
                   ],
                 ),
               ],

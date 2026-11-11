@@ -335,6 +335,76 @@ class EmployeeManagementService {
     }).toList();
   }
 
+  /// Tạo tài khoản nhân viên mới và lưu vào Supabase.
+  Future<EmployeeRecord> createEmployee({
+    required String fullName,
+    required String email,
+    required String password,
+    required String phone,
+    required String role,
+    String? storeId,
+    String? storeName,
+    String? warehouseId,
+    String? warehouseName,
+    bool isActive = true,
+    String? creatorRole,
+  }) async {
+    final normRole = EmployeeRecord.normalizeRole(role);
+    final cleanEmail = email.trim().toLowerCase();
+
+    String? userId;
+
+    // 1. Đăng ký tài khoản trên Supabase Auth trước để nhận chuẩn UUID id (`auth.users(id)`)
+    try {
+      final authRes = await _supabase.auth.signUp(
+        email: cleanEmail,
+        password: password,
+        data: {'full_name': fullName.trim(), 'role': normRole},
+      );
+      userId = authRes.user?.id;
+    } catch (e) {
+      debugPrint('Supabase auth signUp error: $e');
+    }
+
+    final finalId = userId ?? 'emp_${DateTime.now().millisecondsSinceEpoch}';
+    final code = EmployeeRecord.buildCode(finalId, normRole);
+
+    final record = EmployeeRecord(
+      id: finalId,
+      code: code,
+      fullName: fullName.trim(),
+      email: cleanEmail,
+      phone: phone.trim(),
+      role: normRole,
+      isActive: isActive,
+      storeId: storeId,
+      storeName: storeName ?? '',
+      warehouseId: warehouseId,
+      warehouseName: warehouseName ?? '',
+    );
+
+    // 2. Lưu vào bảng employees trên Supabase
+    try {
+      await _supabase.from('employees').insert({
+        'id': finalId,
+        'code': code,
+        'full_name': fullName.trim(),
+        'email': cleanEmail,
+        'phone': phone.trim(),
+        'role': normRole,
+        'store_id': storeId,
+        'warehouse_id': warehouseId,
+        'is_active': isActive,
+      });
+    } catch (e) {
+      debugPrint('Không thể insert vào Supabase employees: $e');
+      throw FormatException('Không thể lưu hồ sơ nhân viên vào database: $e');
+    }
+
+    _cacheSessionEmployee(record);
+    return record;
+  }
+
   /// Cập nhật thông tin tài khoản nhân viên (Tên, Email, SĐT, Chức vụ, Nơi làm việc, Trạng thái).
   Future<EmployeeRecord> updateEmployee({
     required String id,
