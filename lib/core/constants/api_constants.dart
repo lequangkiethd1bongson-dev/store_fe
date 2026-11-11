@@ -1,4 +1,4 @@
-class ApiConstants {
+     class ApiConstants {
   ApiConstants._();
 
   /// Địa chỉ Backend API:
@@ -10,10 +10,7 @@ class ApiConstants {
   /// 3. Nếu chạy trên MÁY ẢO Android (Emulator):
   ///    dùng: 'http://10.0.2.2:8080/api'
   //static const String baseUrl = 'http://10.100.3.212:8080/api';
-  static const String baseUrl = String.fromEnvironment(
-    'BACKEND_API_URL',
-    defaultValue: 'http://10.0.2.2:8080/api',
-  );
+  static const String baseUrl = 'http://10.0.2.2:8080/api';
   // static const String baseUrl = 'http://127.0.0.1:8080/api';
   // static const String baseUrl = 'http://192.168.1.7:8080/api';
   /// thời gian chờ tối đa cho một yêu cầu http.
@@ -161,54 +158,43 @@ class ApiConstants {
       '/warehouse/goods-receipts/$id/cancel';
 
   // ---------------------------------------------------------------------------
-  // QUẢN LÝ NHÂN SỰ, PHÂN LỊCH CA, BẢNG CÔNG TÍNH LƯƠNG & HỒ SƠ (ROLE: ADMIN / MANAGER / STAFF)
+  // QUẢN LÝ NHÂN VIÊN, CHẤM CÔNG, DASHBOARD CỬA HÀNG & THỐNG KÊ (ROLE: ADMIN)
   // ---------------------------------------------------------------------------
 
-  /// GET / POST /admin/employees → Danh sách & tạo tài khoản nhân viên mới.
+  /// GET / POST /admin/employees → Danh sách & tạo tài khoản nhân viên.
   static const String adminEmployees = '/admin/employees';
 
-  /// GET / PUT /admin/employees/{id} → Xem & cập nhật hồ sơ/phân công nhân viên.
+  /// GET / PUT /admin/employees/{id} → Xem & sửa hồ sơ/chức vụ/nơi làm việc nhân viên.
   static String adminEmployeeById(String id) => '/admin/employees/$id';
 
-  /// PATCH /admin/employees/{id}/status → Kích hoạt hoặc khóa tài khoản (is_active).
+  /// PATCH /admin/employees/{id}/status → Kích hoạt hoặc khóa tài khoản nhân viên.
   static String adminEmployeeStatus(String id) =>
       '/admin/employees/$id/status';
-
-  /// POST /admin/employees/{id}/change-password → Admin đổi mật khẩu cho nhân viên.
-  static String adminEmployeeChangePassword(String id) =>
-      '/admin/employees/$id/change-password';
-
-  /// GET / POST /admin/shifts → Danh sách lịch phân ca & gán ca làm việc.
-  static const String adminShifts = '/admin/shifts';
-
-  /// POST /admin/shifts/bulk → Xếp lịch làm việc hàng loạt theo tuần/tháng.
-  static const String adminShiftsBulk = '/admin/shifts/bulk';
-
-  /// GET /admin/timesheets → Danh sách bảng chấm công & tính lương hàng tháng.
-  static const String adminTimesheets = '/admin/timesheets';
-
-  /// PUT /admin/timesheets/{id} → Cập nhật chi tiết bảng công & phụ cấp.
-  static String adminTimesheetById(String id) => '/admin/timesheets/$id';
-
-  /// POST /admin/timesheets/{id}/approve → Duyệt hoặc từ chối bảng công tháng.
-  static String approveAdminTimesheet(String id) =>
-      '/admin/timesheets/$id/approve';
-
-  /// GET /admin/stores/revenue → Thống kê doanh thu các cửa hàng đang hoạt động (Trang chủ Admin).
-  static const String adminStoresRevenue = '/admin/stores/revenue';
 
   /// GET /admin/attendance → Danh sách chấm công nhân viên theo từng cơ sở.
   static const String adminAttendance = '/admin/attendance';
 
-  /// POST /admin/attendance/status → Đánh dấu nhân viên Đang đi làm / Không đi làm & cập nhật ngày công.
+  /// POST /admin/attendance/status → Đánh dấu nhân viên Đang làm / Đang nghỉ.
   static const String adminAttendanceStatus = '/admin/attendance/status';
 
-  /// PATCH /admin/attendance/work-days → Quản lý / chỉnh sửa số ngày công nhân viên đã chấm công.
+  /// PATCH /admin/attendance/work-days → Cập nhật số ngày công của nhân viên.
   static const String adminAttendanceWorkDays = '/admin/attendance/work-days';
 
-  /// GET / PUT /staff/profile → Xem & chỉnh sửa hồ sơ nhân viên đang đăng nhập.
+  /// GET / POST /admin/shifts → Lịch phân ca nhân viên.
+  static const String adminShifts = '/admin/shifts';
+
+  /// GET /admin/timesheets → Bảng công & lương theo tháng.
+  static const String adminTimesheets = '/admin/timesheets';
+
+  /// GET /admin/stores/revenue → Dashboard quản lý thông tin & doanh thu các cửa hàng.
+  static const String adminStoresRevenue = '/admin/stores/revenue';
+
+  /// GET /admin/statistics/facilities → Quản lý thống kê lượng hàng tồn & lượng bán các cơ sở.
+  static const String adminFacilityStatistics = '/admin/statistics/facilities';
+
+  /// GET / PUT /staff/profile → Xem & cập nhật thông tin cá nhân đang đăng nhập.
   static const String staffProfile = '/staff/profile';
 
-  /// POST /staff/profile/change-password → Đổi mật khẩu tài khoản nhân viên.
+  /// POST /staff/profile/change-password → Đổi mật khẩu tài khoản.
   static const String staffChangePassword = '/staff/profile/change-password';
 }

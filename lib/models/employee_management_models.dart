@@ -1,5 +1,7 @@
-/// Các mô hình dữ liệu cho Quản lý Nhân viên, Phân lịch ca làm việc,
-/// Phê duyệt Bảng công & Tính lương, và Quản lý Hồ sơ Nhân viên.
+// Các mô hình dữ liệu cho:
+// - Dashboard Quản lý thông tin Cửa hàng (Trang chủ & Tab Cửa hàng)
+// - Quản lý Nhân viên (Chấm công theo cơ sở, Quản lý tài khoản nhân viên, Tạo tài khoản nhân viên)
+// - Quản lý Thống kê (Lượng hàng tồn & lượng bán/xuất của các cơ sở Kho và Cửa hàng)
 
 class BranchLocation {
   const BranchLocation({
@@ -10,6 +12,7 @@ class BranchLocation {
     this.phone = '',
     this.managerId,
     this.managerName = '',
+    this.staffCount = 0,
     this.isActive = true,
   });
 
@@ -20,12 +23,16 @@ class BranchLocation {
   final String phone;
   final String? managerId;
   final String managerName;
+  final int staffCount;
   final bool isActive;
 
   bool get isStore => type.toUpperCase() == 'STORE';
   bool get isWarehouse => type.toUpperCase() == 'WAREHOUSE';
 
-  factory BranchLocation.fromJson(Map<String, dynamic> json, {String defaultType = 'STORE'}) {
+  factory BranchLocation.fromJson(
+    Map<String, dynamic> json, {
+    String defaultType = 'STORE',
+  }) {
     return BranchLocation(
       id: (json['id'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
@@ -33,7 +40,10 @@ class BranchLocation {
       address: (json['address'] ?? '').toString(),
       phone: (json['phone'] ?? '').toString(),
       managerId: json['managerId']?.toString() ?? json['manager_id']?.toString(),
-      managerName: (json['managerName'] ?? json['manager_name'] ?? '').toString(),
+      managerName:
+          (json['managerName'] ?? json['manager_name'] ?? '').toString(),
+      staffCount:
+          int.tryParse((json['staffCount'] ?? json['staff_count'] ?? 0).toString()) ?? 0,
       isActive: json['isActive'] == null
           ? (json['is_active'] == null ? true : json['is_active'] == true)
           : json['isActive'] == true,
@@ -54,6 +64,9 @@ class EmployeeRecord {
     this.storeName = '',
     this.warehouseId,
     this.warehouseName = '',
+    this.todayShift = 'SHIFT_1',
+    this.isWorkingToday = true,
+    this.workDays = 24,
     this.notifyShift = true,
     this.notifyEmail = true,
     this.createdAt,
@@ -70,6 +83,9 @@ class EmployeeRecord {
   final String storeName;
   final String? warehouseId;
   final String warehouseName;
+  final String todayShift;
+  final bool isWorkingToday;
+  final int workDays;
   final bool notifyShift;
   final bool notifyEmail;
   final DateTime? createdAt;
@@ -80,9 +96,23 @@ class EmployeeRecord {
     if (role == 'admin') return 'Toàn hệ thống (Trụ sở chính SSM4)';
     if (storeName.isNotEmpty) return 'Cửa hàng: $storeName';
     if (warehouseName.isNotEmpty) return 'Kho: $warehouseName';
-    if (role == 'store_manager' || role == 'sales') return 'Chưa phân công Cửa hàng';
-    if (role == 'kho_manager' || role == 'kho') return 'Chưa phân công Kho';
+    if (role == 'store_manager' || role == 'sales') {
+      return 'Chưa phân công Cửa hàng';
+    }
+    if (role == 'kho_manager' || role == 'kho') {
+      return 'Chưa phân công Kho';
+    }
     return 'Chưa phân công';
+  }
+
+  /// Tên cơ sở làm việc ngắn gọn dùng để gom nhóm theo từng cơ sở.
+  String get facilityGroupName {
+    if (role == 'admin') return 'Trụ sở Quản trị Hệ thống';
+    if (storeName.isNotEmpty) return storeName;
+    if (warehouseName.isNotEmpty) return warehouseName;
+    if (isStoreRole) return 'Khối Cửa hàng (Chưa gán cơ sở)';
+    if (isWarehouseRole) return 'Khối Kho hàng (Chưa gán cơ sở)';
+    return 'Cơ sở chung SSM4';
   }
 
   bool get isStoreRole => role == 'store_manager' || role == 'sales';
@@ -153,6 +183,9 @@ class EmployeeRecord {
     String? storeName,
     String? warehouseId,
     String? warehouseName,
+    String? todayShift,
+    bool? isWorkingToday,
+    int? workDays,
     bool? notifyShift,
     bool? notifyEmail,
   }) {
@@ -169,6 +202,9 @@ class EmployeeRecord {
       storeName: storeName ?? this.storeName,
       warehouseId: warehouseId ?? this.warehouseId,
       warehouseName: warehouseName ?? this.warehouseName,
+      todayShift: todayShift ?? this.todayShift,
+      isWorkingToday: isWorkingToday ?? this.isWorkingToday,
+      workDays: workDays ?? this.workDays,
       notifyShift: notifyShift ?? this.notifyShift,
       notifyEmail: notifyEmail ?? this.notifyEmail,
       createdAt: createdAt,
@@ -176,57 +212,74 @@ class EmployeeRecord {
   }
 
   factory EmployeeRecord.fromJson(Map<String, dynamic> json) {
-    final id = (json['id'] ?? '').toString();
+    final id = (json['id'] ?? json['employeeId'] ?? '').toString();
     final role = normalizeRole((json['role'] ?? 'sales').toString());
     final code = (json['code'] ?? '').toString().trim();
 
-    String storeName = (json['storeName'] ?? json['store_name'] ?? '').toString();
+    String storeName =
+        (json['storeName'] ?? json['store_name'] ?? '').toString();
     if (storeName.isEmpty && json['stores'] is Map) {
       storeName = (json['stores']['name'] ?? '').toString();
     }
 
-    String warehouseName = (json['warehouseName'] ?? json['warehouse_name'] ?? '').toString();
+    String warehouseName =
+        (json['warehouseName'] ?? json['warehouse_name'] ?? '').toString();
     if (warehouseName.isEmpty && json['warehouses'] is Map) {
       warehouseName = (json['warehouses']['name'] ?? '').toString();
     }
 
     final rawStoreId = json['storeId'] ?? json['store_id'];
     final rawWarehouseId = json['warehouseId'] ?? json['warehouse_id'];
+    final isActive = json['isActive'] != null
+        ? json['isActive'] == true
+        : (json['is_active'] == null ? true : json['is_active'] == true);
+    final todayShift =
+        (json['todayShift'] ?? json['shiftCode'] ?? (isActive ? 'SHIFT_1' : 'OFF'))
+            .toString()
+            .toUpperCase();
+    final isWorkingToday = json['isWorkingToday'] != null
+        ? json['isWorkingToday'] == true
+        : (json['isWorking'] != null
+            ? json['isWorking'] == true
+            : todayShift != 'OFF');
 
     return EmployeeRecord(
       id: id,
       code: code.isNotEmpty ? code : buildCode(id, role),
-      fullName: (json['fullName'] ?? json['full_name'] ?? json['name'] ?? 'Chưa đặt tên').toString(),
+      fullName: (json['fullName'] ??
+              json['full_name'] ??
+              json['name'] ??
+              'Chưa đặt tên')
+          .toString(),
       email: (json['email'] ?? '').toString(),
       phone: (json['phone'] ?? '').toString(),
       role: role,
-      isActive: json['isActive'] != null
-          ? json['isActive'] == true
-          : (json['is_active'] == true),
+      isActive: isActive,
       storeId: rawStoreId?.toString(),
       storeName: storeName,
       warehouseId: rawWarehouseId?.toString(),
       warehouseName: warehouseName,
+      todayShift: todayShift,
+      isWorkingToday: isWorkingToday,
+      workDays:
+          int.tryParse((json['workDays'] ?? json['work_days'] ?? 24).toString()) ??
+              24,
       notifyShift: json['notifyShift'] != null
           ? json['notifyShift'] == true
-          : (json['notify_shift'] == null ? true : json['notify_shift'] == true),
+          : (json['notify_shift'] == null
+              ? true
+              : json['notify_shift'] == true),
       notifyEmail: json['notifyEmail'] != null
           ? json['notifyEmail'] == true
-          : (json['notify_email'] == null ? true : json['notify_email'] == true),
+          : (json['notify_email'] == null
+              ? true
+              : json['notify_email'] == true),
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
-          : (json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null),
+          : (json['created_at'] != null
+              ? DateTime.tryParse(json['created_at'].toString())
+              : null),
     );
-  }
-
-  /// Tên cơ sở làm việc ngắn gọn dùng để gom nhóm theo từng cơ sở.
-  String get facilityGroupName {
-    if (role == 'admin') return 'Trụ sở Quản trị Hệ thống';
-    if (storeName.isNotEmpty) return storeName;
-    if (warehouseName.isNotEmpty) return warehouseName;
-    if (isStoreRole) return 'Khối Cửa hàng (Chưa gán cơ sở)';
-    if (isWarehouseRole) return 'Khối Kho hàng (Chưa gán cơ sở)';
-    return 'Cơ sở chung SSM4';
   }
 }
 
@@ -259,53 +312,34 @@ class WorkShiftRecord {
   final String warehouseName;
   final String note;
 
-  String get shiftLabel => labelForShift(shiftCode);
-  String get shortLabel => shortLabelForShift(shiftCode);
-
-  static String labelForShift(String code) {
-    switch (code.toUpperCase()) {
-      case 'SHIFT_1':
-        return 'Ca 1 (07:00 - 15:00)';
-      case 'SHIFT_2':
-        return 'Ca 2 (15:00 - 23:00)';
-      case 'OFF':
-        return 'Nghỉ (OFF)';
-      default:
-        return 'Ca 1 (07:00 - 15:00)';
-    }
-  }
-
-  static String shortLabelForShift(String code) {
-    switch (code.toUpperCase()) {
-      case 'SHIFT_1':
-        return 'Ca 1\n07h-15h';
-      case 'SHIFT_2':
-        return 'Ca 2\n15h-23h';
-      case 'OFF':
-        return 'Nghỉ\nOFF';
-      default:
-        return 'Ca 1\n07h-15h';
-    }
-  }
+  bool get isWorking => shiftCode.toUpperCase() != 'OFF';
 
   factory WorkShiftRecord.fromJson(Map<String, dynamic> json) {
     final empId = (json['employeeId'] ?? json['employee_id'] ?? '').toString();
-    final role = EmployeeRecord.normalizeRole((json['role'] ?? 'sales').toString());
+    final role =
+        EmployeeRecord.normalizeRole((json['role'] ?? 'sales').toString());
     final rawDate = (json['workDate'] ?? json['work_date'] ?? '').toString();
     final datePart = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
 
     return WorkShiftRecord(
       id: (json['id'] ?? '$empId-$datePart').toString(),
       employeeId: empId,
-      employeeCode: (json['employeeCode'] ?? EmployeeRecord.buildCode(empId, role)).toString(),
-      employeeName: (json['employeeName'] ?? json['employee_name'] ?? '').toString(),
+      employeeCode:
+          (json['employeeCode'] ?? EmployeeRecord.buildCode(empId, role))
+              .toString(),
+      employeeName:
+          (json['employeeName'] ?? json['employee_name'] ?? '').toString(),
       role: role,
       workDate: datePart,
-      shiftCode: (json['shiftCode'] ?? json['shift_code'] ?? 'SHIFT_1').toString().toUpperCase(),
+      shiftCode:
+          (json['shiftCode'] ?? json['shift_code'] ?? 'SHIFT_1')
+              .toString()
+              .toUpperCase(),
       storeId: (json['storeId'] ?? json['store_id'])?.toString(),
       storeName: (json['storeName'] ?? json['store_name'] ?? '').toString(),
       warehouseId: (json['warehouseId'] ?? json['warehouse_id'])?.toString(),
-      warehouseName: (json['warehouseName'] ?? json['warehouse_name'] ?? '').toString(),
+      warehouseName:
+          (json['warehouseName'] ?? json['warehouse_name'] ?? '').toString(),
       note: (json['note'] ?? '').toString(),
     );
   }
@@ -330,10 +364,7 @@ class TimesheetPayrollRecord {
     required this.allowance,
     required this.deduction,
     required this.totalSalary,
-    required this.status, // 'PENDING' | 'APPROVED' | 'REJECTED'
-    this.approvedBy,
-    this.approvedByName = '',
-    this.approvedAt,
+    required this.status,
     this.note = '',
   });
 
@@ -355,27 +386,7 @@ class TimesheetPayrollRecord {
   final int deduction;
   final int totalSalary;
   final String status;
-  final String? approvedBy;
-  final String approvedByName;
-  final DateTime? approvedAt;
   final String note;
-
-  bool get isApproved => status.toUpperCase() == 'APPROVED';
-  bool get isRejected => status.toUpperCase() == 'REJECTED';
-  bool get isPending => !isApproved && !isRejected;
-
-  String get roleLabel => EmployeeRecord.labelForRole(role);
-
-  String get statusLabel {
-    switch (status.toUpperCase()) {
-      case 'APPROVED':
-        return 'Đã duyệt chốt công';
-      case 'REJECTED':
-        return 'Từ chối / Cần kiểm tra';
-      default:
-        return 'Chờ duyệt';
-    }
-  }
 
   TimesheetPayrollRecord copyWith({
     int? workDays,
@@ -387,8 +398,6 @@ class TimesheetPayrollRecord {
     int? deduction,
     int? totalSalary,
     String? status,
-    String? approvedByName,
-    DateTime? approvedAt,
     String? note,
   }) {
     final nextHours = totalHours ?? this.totalHours;
@@ -397,7 +406,12 @@ class TimesheetPayrollRecord {
     final nextAllow = allowance ?? this.allowance;
     final nextDed = deduction ?? this.deduction;
     final computedSalary = totalSalary ??
-        ((nextHours * nextRate) + (nextOt * nextRate * 1.5) + nextAllow - nextDed).round().clamp(0, 999999999);
+        ((nextHours * nextRate) +
+                (nextOt * nextRate * 1.5) +
+                nextAllow -
+                nextDed)
+            .round()
+            .clamp(0, 999999999);
 
     return TimesheetPayrollRecord(
       id: id,
@@ -418,37 +432,66 @@ class TimesheetPayrollRecord {
       deduction: nextDed,
       totalSalary: computedSalary,
       status: status ?? this.status,
-      approvedBy: approvedBy,
-      approvedByName: approvedByName ?? this.approvedByName,
-      approvedAt: approvedAt ?? this.approvedAt,
       note: note ?? this.note,
     );
   }
 
   factory TimesheetPayrollRecord.fromJson(Map<String, dynamic> json) {
     final empId = (json['employeeId'] ?? json['employee_id'] ?? '').toString();
-    final role = EmployeeRecord.normalizeRole((json['role'] ?? 'sales').toString());
-    final workDays = int.tryParse((json['workDays'] ?? json['work_days'] ?? 22).toString()) ?? 22;
-    final standardDays = int.tryParse((json['standardDays'] ?? json['standard_days'] ?? 26).toString()) ?? 26;
-    final totalHours = double.tryParse((json['totalHours'] ?? json['total_hours'] ?? (workDays * 8)).toString()) ?? (workDays * 8.0);
-    final overtimeHours = double.tryParse((json['overtimeHours'] ?? json['overtime_hours'] ?? 0).toString()) ?? 0.0;
-    final hourlyRate = double.tryParse((json['hourlyRate'] ?? json['hourly_rate'] ?? 35000).toString())?.round() ?? 35000;
-    final allowance = double.tryParse((json['allowance'] ?? 500000).toString())?.round() ?? 500000;
-    final deduction = double.tryParse((json['deduction'] ?? 0).toString())?.round() ?? 0;
-    final rawTotal = double.tryParse((json['totalSalary'] ?? json['total_salary'] ?? 0).toString())?.round() ?? 0;
+    final role =
+        EmployeeRecord.normalizeRole((json['role'] ?? 'sales').toString());
+    final workDays =
+        int.tryParse((json['workDays'] ?? json['work_days'] ?? 24).toString()) ??
+            24;
+    final standardDays = int.tryParse(
+            (json['standardDays'] ?? json['standard_days'] ?? 26).toString()) ??
+        26;
+    final totalHours = double.tryParse(
+            (json['totalHours'] ?? json['total_hours'] ?? (workDays * 8))
+                .toString()) ??
+        (workDays * 8.0);
+    final overtimeHours = double.tryParse(
+            (json['overtimeHours'] ?? json['overtime_hours'] ?? 0).toString()) ??
+        0.0;
+    final hourlyRate = double.tryParse(
+                (json['hourlyRate'] ?? json['hourly_rate'] ?? 35000).toString())
+            ?.round() ??
+        35000;
+    final allowance =
+        double.tryParse((json['allowance'] ?? 500000).toString())?.round() ??
+            500000;
+    final deduction =
+        double.tryParse((json['deduction'] ?? 0).toString())?.round() ?? 0;
+    final rawTotal = double.tryParse(
+                (json['totalSalary'] ?? json['total_salary'] ?? 0).toString())
+            ?.round() ??
+        0;
     final computedSalary = rawTotal > 0
         ? rawTotal
-        : ((totalHours * hourlyRate) + (overtimeHours * hourlyRate * 1.5) + allowance - deduction).round().clamp(0, 999999999);
+        : ((totalHours * hourlyRate) +
+                (overtimeHours * hourlyRate * 1.5) +
+                allowance -
+                deduction)
+            .round()
+            .clamp(0, 999999999);
 
     return TimesheetPayrollRecord(
-      id: (json['id'] ?? '$empId-${json['monthYear'] ?? json['month_year']}').toString(),
+      id: (json['id'] ?? '$empId-${json['monthYear'] ?? json['month_year']}')
+          .toString(),
       employeeId: empId,
-      employeeCode: (json['employeeCode'] ?? EmployeeRecord.buildCode(empId, role)).toString(),
-      employeeName: (json['employeeName'] ?? json['employee_name'] ?? 'Nhân viên').toString(),
+      employeeCode:
+          (json['employeeCode'] ?? EmployeeRecord.buildCode(empId, role))
+              .toString(),
+      employeeName: (json['employeeName'] ??
+              json['employee_name'] ??
+              'Nhân viên')
+          .toString(),
       email: (json['email'] ?? '').toString(),
       phone: (json['phone'] ?? '').toString(),
       role: role,
-      branchName: (json['branchName'] ?? json['branch_name'] ?? 'Chi nhánh SSM4').toString(),
+      branchName:
+          (json['branchName'] ?? json['branch_name'] ?? 'Chi nhánh SSM4')
+              .toString(),
       monthYear: (json['monthYear'] ?? json['month_year'] ?? '').toString(),
       workDays: workDays,
       standardDays: standardDays,
@@ -459,17 +502,12 @@ class TimesheetPayrollRecord {
       deduction: deduction,
       totalSalary: computedSalary,
       status: (json['status'] ?? 'PENDING').toString().toUpperCase(),
-      approvedBy: (json['approvedBy'] ?? json['approved_by'])?.toString(),
-      approvedByName: (json['approvedByName'] ?? json['approved_by_name'] ?? '').toString(),
-      approvedAt: json['approvedAt'] != null
-          ? DateTime.tryParse(json['approvedAt'].toString())
-          : (json['approved_at'] != null ? DateTime.tryParse(json['approved_at'].toString()) : null),
       note: (json['note'] ?? '').toString(),
     );
   }
 }
 
-/// Thông tin thống kê Doanh thu của từng Cửa hàng đang hoạt động dành cho Trang chủ Admin.
+/// Thông tin Dashboard Quản lý Cửa hàng trên Trang chủ Admin & Tab Cửa hàng.
 class StoreRevenueSummary {
   const StoreRevenueSummary({
     required this.storeId,
@@ -486,6 +524,8 @@ class StoreRevenueSummary {
     required this.todayOrders,
     required this.monthOrders,
     required this.growthPercent,
+    this.stockQuantity = 1500,
+    this.lowStockCount = 3,
   });
 
   final String storeId;
@@ -502,9 +542,95 @@ class StoreRevenueSummary {
   final int todayOrders;
   final int monthOrders;
   final double growthPercent;
+  final int stockQuantity;
+  final int lowStockCount;
 
   double get targetProgress =>
       monthlyTarget <= 0 ? 0.0 : (monthRevenue / monthlyTarget).clamp(0.0, 1.0);
 }
 
+/// Thông tin thống kê Lượng hàng (tồn kho / tồn kệ) & Lượng bán / Xuất hàng
+/// của từng Cơ sở Kho hàng hoặc Cửa hàng dành cho màn hình Quản lý Thống kê Admin.
+class FacilityStatisticsRecord {
+  const FacilityStatisticsRecord({
+    required this.facilityId,
+    required this.facilityName,
+    required this.facilityType, // 'STORE' | 'WAREHOUSE'
+    required this.address,
+    required this.phone,
+    required this.managerName,
+    required this.staffCount,
+    required this.stockQuantity,
+    required this.maxCapacity,
+    required this.skuCount,
+    required this.lowStockCount,
+    required this.inboundQuantity,
+    required this.soldOrExportedQuantity,
+    required this.orderOrExportCount,
+    required this.revenueOrStockValue,
+    required this.growthPercent,
+    this.topProducts = const [],
+  });
+
+  final String facilityId;
+  final String facilityName;
+  final String facilityType;
+  final String address;
+  final String phone;
+  final String managerName;
+  final int staffCount;
+  final int stockQuantity;
+  final int maxCapacity;
+  final int skuCount;
+  final int lowStockCount;
+  final int inboundQuantity;
+  final int soldOrExportedQuantity;
+  final int orderOrExportCount;
+  final int revenueOrStockValue;
+  final double growthPercent;
+  final List<String> topProducts;
+
+  bool get isStore => facilityType.toUpperCase() == 'STORE';
+  bool get isWarehouse => facilityType.toUpperCase() == 'WAREHOUSE';
+
+  double get capacityRatio =>
+      maxCapacity <= 0 ? 0.5 : (stockQuantity / maxCapacity).clamp(0.0, 1.0);
+
+  factory FacilityStatisticsRecord.fromJson(Map<String, dynamic> json) {
+    final topRaw = json['topProducts'];
+    final topList = topRaw is List
+        ? topRaw.map((e) => e.toString()).toList()
+        : const <String>[];
+
+    return FacilityStatisticsRecord(
+      facilityId: (json['facilityId'] ?? json['id'] ?? '').toString(),
+      facilityName: (json['facilityName'] ?? json['name'] ?? '').toString(),
+      facilityType: (json['facilityType'] ?? json['type'] ?? 'STORE')
+          .toString()
+          .toUpperCase(),
+      address: (json['address'] ?? '').toString(),
+      phone: (json['phone'] ?? '').toString(),
+      managerName: (json['managerName'] ?? '').toString(),
+      staffCount: int.tryParse((json['staffCount'] ?? 6).toString()) ?? 6,
+      stockQuantity:
+          int.tryParse((json['stockQuantity'] ?? 0).toString()) ?? 0,
+      maxCapacity:
+          int.tryParse((json['maxCapacity'] ?? 2000).toString()) ?? 2000,
+      skuCount: int.tryParse((json['skuCount'] ?? 0).toString()) ?? 0,
+      lowStockCount:
+          int.tryParse((json['lowStockCount'] ?? 0).toString()) ?? 0,
+      inboundQuantity:
+          int.tryParse((json['inboundQuantity'] ?? 0).toString()) ?? 0,
+      soldOrExportedQuantity:
+          int.tryParse((json['soldOrExportedQuantity'] ?? 0).toString()) ?? 0,
+      orderOrExportCount:
+          int.tryParse((json['orderOrExportCount'] ?? 0).toString()) ?? 0,
+      revenueOrStockValue:
+          int.tryParse((json['revenueOrStockValue'] ?? 0).toString()) ?? 0,
+      growthPercent:
+          double.tryParse((json['growthPercent'] ?? 10.0).toString()) ?? 10.0,
+      topProducts: topList,
+    );
+  }
+}
 

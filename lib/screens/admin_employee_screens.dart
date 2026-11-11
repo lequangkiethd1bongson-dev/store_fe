@@ -2,20 +2,36 @@ import 'package:flutter/material.dart';
 
 import '../features/suppliers/screens/supplier_list_screen.dart';
 import '../models/employee_management_models.dart';
-import '../models/store_models.dart';
 import '../services/employee_management_service.dart';
+import '../state/staff_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'goods_receipt_screens.dart';
+import 'kho_addproduct.dart';
+import 'restock_screens.dart';
+import 'staff_screens.dart';
+
+String formatCurrency(int amount) {
+  final raw = amount.toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < raw.length; i++) {
+    if (i > 0 && (raw.length - i) % 3 == 0) {
+      buffer.write('.');
+    }
+    buffer.write(raw[i]);
+  }
+  return '${buffer.toString()}đ';
+}
 
 // =============================================================================
-// 1. TRANG CHỦ ADMIN (THIẾT KẾ DỰA THEO HOME_SCREEN VỚI QUẢN LÝ DOANH THU CỬA HÀNG)
+// 1. TRANG CHỦ ADMIN (THIẾT KẾ THEO CHỦ ĐỀ HOMESCREEN + DASHBOARD CỬA HÀNG)
 // =============================================================================
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({
     required this.userName,
     required this.userEmail,
+    required this.staffController,
     required this.onOpenMenu,
     required this.onSelectBottomTab,
     required this.onLogout,
@@ -24,6 +40,7 @@ class AdminHomeScreen extends StatefulWidget {
 
   final String userName;
   final String userEmail;
+  final StaffController staffController;
   final VoidCallback onOpenMenu;
   final ValueChanged<int> onSelectBottomTab;
   final VoidCallback onLogout;
@@ -35,26 +52,29 @@ class AdminHomeScreen extends StatefulWidget {
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
   final EmployeeManagementService _service = EmployeeManagementService();
   final TextEditingController _searchController = TextEditingController();
+  final PageController _bannerController = PageController();
 
   List<StoreRevenueSummary> _storeRevenues = [];
   bool _isLoading = true;
   String _searchQuery = '';
   String _period = 'MONTH'; // 'TODAY' | 'WEEK' | 'MONTH'
+  int _bannerIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadRevenueData();
+    _loadDashboardData();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _bannerController.dispose();
     _service.dispose();
     super.dispose();
   }
 
-  Future<void> _loadRevenueData() async {
+  Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
       final list = await _service.getStoreRevenueSummaries();
@@ -102,15 +122,276 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     }
   }
 
-  void _showStoreRevenueDetailSheet(StoreRevenueSummary store) {
+  void _openModuleScreen(Widget screen) {
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => screen))
+        .then((_) => _loadDashboardData());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final topInset = MediaQuery.viewPaddingOf(context).top;
+    final filteredStores = _storeRevenues.where((s) {
+      if (_searchQuery.trim().isEmpty) return true;
+      final q = _searchQuery.trim().toLowerCase();
+      return s.storeName.toLowerCase().contains(q) ||
+          s.address.toLowerCase().contains(q) ||
+          s.managerName.toLowerCase().contains(q);
+    }).toList();
+
+    final totalRevenue =
+        filteredStores.fold<int>(0, (sum, s) => sum + _revenueForPeriod(s));
+    final totalOrders =
+        filteredStores.fold<int>(0, (sum, s) => sum + _ordersForPeriod(s));
+    final totalStaff =
+        filteredStores.fold<int>(0, (sum, s) => sum + s.staffCount);
+    final totalWorking =
+        filteredStores.fold<int>(0, (sum, s) => sum + s.workingTodayCount);
+    final totalLowStock =
+        filteredStores.fold<int>(0, (sum, s) => sum + s.lowStockCount);
+
+    return RefreshIndicator(
+      color: AppColors.blue700,
+      onRefresh: _loadDashboardData,
+      child: CustomScrollView(
+        slivers: [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _CollapsingAdminHomeHeader(
+              userName: widget.userName,
+              storeCount: _storeRevenues.length,
+              totalRevenue: totalRevenue,
+              totalOrders: totalOrders,
+              totalWorking: totalWorking,
+              totalStaff: totalStaff,
+              periodLabel: _periodLabel,
+              onOpenMenu: widget.onOpenMenu,
+              onRefreshTap: _loadDashboardData,
+              onOpenFunctions: () => widget.onSelectBottomTab(1),
+              searchController: _searchController,
+              onSearchChanged: (v) => setState(() => _searchQuery = v),
+              searchQuery: _searchQuery.trim(),
+              topInset: topInset,
+              bannerController: _bannerController,
+              bannerIndex: _bannerIndex,
+              onBannerChanged: (idx) => setState(() => _bannerIndex = idx),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
+              decoration: const BoxDecoration(color: AppColors.canvas),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── 5 CHỨC NĂNG TRọng TÂM (QUICK LAUNCH) ─────────────────
+                  SectionHeading(
+                    title: '5 Phân hệ Quản trị Hệ thống',
+                    action: 'Tất cả chức năng',
+                    onAction: () => widget.onSelectBottomTab(1),
+                  ),
+                  _AdminQuickModulesRow(
+                    onOpenWarehouse: () => _openModuleScreen(
+                      AdminWarehouseManagementScreen(
+                        userName: widget.userName,
+                        staffController: widget.staffController,
+                      ),
+                    ),
+                    onOpenStore: () => _openModuleScreen(
+                      AdminStoreManagementHubScreen(
+                        userName: widget.userName,
+                        staffController: widget.staffController,
+                      ),
+                    ),
+                    onOpenSupplier: () => _openModuleScreen(
+                      const SupplierListScreen(userRole: 'ADMIN'),
+                    ),
+                    onOpenEmployee: () => _openModuleScreen(
+                      const AdminEmployeeManagementHubScreen(),
+                    ),
+                    onOpenStatistics: () => _openModuleScreen(
+                      const AdminStatisticsScreen(),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // ── BỘ LỌC KỲ DASHBOARD CỬA HÀNG ─────────────────────────
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Dashboard Quản lý Cửa hàng',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                      ),
+                      _PeriodFilterChip(
+                        label: 'Hôm nay',
+                        selected: _period == 'TODAY',
+                        onTap: () => setState(() => _period = 'TODAY'),
+                      ),
+                      const SizedBox(width: 6),
+                      _PeriodFilterChip(
+                        label: 'Tuần',
+                        selected: _period == 'WEEK',
+                        onTap: () => setState(() => _period = 'WEEK'),
+                      ),
+                      const SizedBox(width: 6),
+                      _PeriodFilterChip(
+                        label: 'Tháng',
+                        selected: _period == 'MONTH',
+                        onTap: () => setState(() => _period = 'MONTH'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── 4 THẺ CHỈ SỐ KPI HỆ THỐNG CỬA HÀNG ───────────────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DashboardMetricTile(
+                          icon: Icons.payments_rounded,
+                          label: 'Doanh thu ($_periodLabel)',
+                          value: formatCurrency(totalRevenue),
+                          subLabel: '+12.8% so với kỳ trước',
+                          tint: const Color(0xFFEFF6FF),
+                          iconColor: AppColors.blue700,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _DashboardMetricTile(
+                          icon: Icons.receipt_long_rounded,
+                          label: 'Tổng đơn bán ra',
+                          value: '$totalOrders đơn',
+                          subLabel: '${filteredStores.length} cơ sở hoạt động',
+                          tint: const Color(0xFFECFDF5),
+                          iconColor: const Color(0xFF059669),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DashboardMetricTile(
+                          icon: Icons.groups_rounded,
+                          label: 'Nhân sự đi làm hôm nay',
+                          value: '$totalWorking / $totalStaff NV',
+                          subLabel: 'Bấm để chấm công NV',
+                          tint: const Color(0xFFFFF7ED),
+                          iconColor: const Color(0xFFEA580C),
+                          onTap: () => _openModuleScreen(
+                            const AdminEmployeeManagementHubScreen(
+                              initialSubTab: 0,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _DashboardMetricTile(
+                          icon: Icons.warning_amber_rounded,
+                          label: 'Cảnh báo tồn kệ thấp',
+                          value: '$totalLowStock mặt hàng',
+                          subLabel: 'Xem thống kê tồn kho',
+                          tint: const Color(0xFFFEF2F2),
+                          iconColor: const Color(0xFFDC2626),
+                          onTap: () => _openModuleScreen(
+                            const AdminStatisticsScreen(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // ── DANH SÁCH DASHBOARD CHI TIẾT TỪNG CỬA HÀNG ───────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Thông tin vận hành từng Cửa hàng (${filteredStores.length})',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => widget.onSelectBottomTab(2),
+                        icon: const Icon(Icons.storefront_rounded, size: 16),
+                        label: const Text('Mở tab Cửa hàng'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (filteredStores.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.line),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Không tìm thấy cửa hàng phù hợp với từ khóa.',
+                          style: TextStyle(color: AppColors.muted),
+                        ),
+                      ),
+                    )
+                  else
+                    ...filteredStores.map(
+                      (store) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _StoreDashboardCard(
+                          summary: store,
+                          periodRevenue: _revenueForPeriod(store),
+                          periodOrders: _ordersForPeriod(store),
+                          periodLabel: _periodLabel,
+                          onOpenDetail: () =>
+                              _showStoreDetailModal(context, store),
+                          onOpenWorkspace: () => _openModuleScreen(
+                            StoreStaffWorkspace(
+                              controller: widget.staffController,
+                              staffName: widget.userName,
+                              userRole: 'ADMIN',
+                              onExit: () => Navigator.of(context).pop(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showStoreDetailModal(BuildContext context, StoreRevenueSummary store) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (sheetCtx) => SafeArea(
+      builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           child: Column(
@@ -131,18 +412,18 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: AppColors.blue50,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(
                       Icons.storefront_rounded,
                       color: AppColors.blue700,
-                      size: 26,
+                      size: 28,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,7 +431,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         Text(
                           store.storeName,
                           style: const TextStyle(
-                            fontSize: 17,
+                            fontSize: 18,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -167,41 +448,43 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   ),
                 ],
               ),
-              const Divider(height: 24),
-              _DetailMetricRow(
+              const Divider(height: 28),
+              _InfoRowItem(
                 label: 'Quản lý cửa hàng',
                 value: store.managerName,
+                icon: Icons.badge_outlined,
               ),
-              _DetailMetricRow(
-                label: 'Số điện thoại liên hệ',
+              _InfoRowItem(
+                label: 'Số điện thoại hotline',
                 value: store.phone,
+                icon: Icons.phone_outlined,
               ),
-              _DetailMetricRow(
-                label: 'Nhân sự đang đi làm hôm nay',
+              _InfoRowItem(
+                label: 'Nhân sự đi làm hôm nay',
                 value: '${store.workingTodayCount}/${store.staffCount} nhân viên',
+                icon: Icons.groups_outlined,
               ),
-              _DetailMetricRow(
+              _InfoRowItem(
                 label: 'Doanh thu hôm nay',
-                value: formatVnd(store.todayRevenue),
-                highlight: true,
+                value: formatCurrency(store.todayRevenue),
+                icon: Icons.today_outlined,
               ),
-              _DetailMetricRow(
-                label: 'Doanh thu 7 ngày qua',
-                value: formatVnd(store.weekRevenue),
-              ),
-              _DetailMetricRow(
+              _InfoRowItem(
                 label: 'Doanh thu tháng này',
-                value: formatVnd(store.monthRevenue),
-                highlight: true,
+                value: formatCurrency(store.monthRevenue),
+                icon: Icons.calendar_month_outlined,
               ),
-              _DetailMetricRow(
-                label: 'Chỉ tiêu doanh thu tháng',
+              _InfoRowItem(
+                label: 'Chỉ tiêu KPI tháng',
                 value:
-                    '${formatVnd(store.monthlyTarget)} (Đạt ${(store.targetProgress * 100).toStringAsFixed(1)}%)',
+                    '${formatCurrency(store.monthlyTarget)} (${(store.targetProgress * 100).toStringAsFixed(1)}%)',
+                icon: Icons.flag_outlined,
               ),
-              _DetailMetricRow(
-                label: 'Tổng đơn hàng tháng này',
-                value: '${store.monthOrders} đơn hàng',
+              _InfoRowItem(
+                label: 'Tổng tồn kệ hiện tại',
+                value:
+                    '${store.stockQuantity} SP (${store.lowStockCount} mã sắp hết)',
+                icon: Icons.inventory_2_outlined,
               ),
               const SizedBox(height: 16),
               Row(
@@ -209,19 +492,31 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        Navigator.pop(sheetCtx);
-                        widget.onSelectBottomTab(3); // Sang tab Chấm công
+                        Navigator.of(ctx).pop();
+                        _openModuleScreen(
+                          const RestockRequestsScreen(userRole: 'ADMIN'),
+                        );
                       },
-                      icon: const Icon(Icons.fact_check_outlined, size: 18),
-                      label: const Text('Kiểm tra chấm công'),
+                      icon: const Icon(Icons.assignment_outlined, size: 18),
+                      label: const Text('Phiếu yêu cầu hàng'),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () => Navigator.pop(sheetCtx),
-                      icon: const Icon(Icons.check_rounded, size: 18),
-                      label: const Text('Đóng'),
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        _openModuleScreen(
+                          StoreStaffWorkspace(
+                            controller: widget.staffController,
+                            staffName: widget.userName,
+                            userRole: 'ADMIN',
+                            onExit: () => Navigator.of(context).pop(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.point_of_sale_rounded, size: 18),
+                      label: const Text('Vào POS Cửa hàng'),
                     ),
                   ),
                 ],
@@ -232,252 +527,52 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       ),
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final topInset = MediaQuery.viewPaddingOf(context).top;
-    final query = _searchQuery.trim().toLowerCase();
-
-    final filteredStores = _storeRevenues.where((s) {
-      if (query.isEmpty) return true;
-      return s.storeName.toLowerCase().contains(query) ||
-          s.address.toLowerCase().contains(query) ||
-          s.managerName.toLowerCase().contains(query);
-    }).toList();
-
-    final totalRevenue = _storeRevenues.fold<int>(
-      0,
-      (sum, item) => sum + _revenueForPeriod(item),
-    );
-    final totalOrders = _storeRevenues.fold<int>(
-      0,
-      (sum, item) => sum + _ordersForPeriod(item),
-    );
-    final totalWorking = _storeRevenues.fold<int>(
-      0,
-      (sum, item) => sum + item.workingTodayCount,
-    );
-    final totalStaff = _storeRevenues.fold<int>(
-      0,
-      (sum, item) => sum + item.staffCount,
-    );
-
-    return RefreshIndicator(
-      color: AppColors.blue700,
-      onRefresh: _loadRevenueData,
-      child: CustomScrollView(
-        slivers: [
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _CollapsingAdminHeader(
-              userName: widget.userName,
-              onOpenMenu: widget.onOpenMenu,
-              onRefreshTap: _loadRevenueData,
-              onLogoutTap: widget.onLogout,
-              searchController: _searchController,
-              onSearchChanged: (value) => setState(() => _searchQuery = value),
-              topInset: topInset,
-              totalRevenue: totalRevenue,
-              storeCount: _storeRevenues.length,
-              totalOrders: totalOrders,
-              periodLabel: _periodLabel,
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-              decoration: const BoxDecoration(color: AppColors.canvas),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Lối tắt nhanh các chức năng của Admin
-                  SectionHeading(
-                    title: 'Chức năng Quản trị viên',
-                    action: 'Mở Menu Chức năng',
-                    onAction: () => widget.onSelectBottomTab(1),
-                  ),
-                  _AdminQuickFunctionGrid(
-                    onSelectBottomTab: widget.onSelectBottomTab,
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Phần Quản lý doanh thu của các cửa hàng đang có
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Quản lý Doanh thu các Cửa hàng',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                      ),
-                      SegmentedButton<String>(
-                        style: const ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        segments: const [
-                          ButtonSegment(
-                            value: 'TODAY',
-                            label: Text('Ngày', style: TextStyle(fontSize: 10)),
-                          ),
-                          ButtonSegment(
-                            value: 'WEEK',
-                            label: Text('Tuần', style: TextStyle(fontSize: 10)),
-                          ),
-                          ButtonSegment(
-                            value: 'MONTH',
-                            label: Text('Tháng', style: TextStyle(fontSize: 10)),
-                          ),
-                        ],
-                        selected: {_period},
-                        onSelectionChanged: (s) =>
-                            setState(() => _period = s.first),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // 3 thẻ chỉ số tổng hợp chuỗi cửa hàng
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _AdminKpiMiniCard(
-                          label: 'Tổng doanh thu ($_periodLabel)',
-                          value: formatVnd(totalRevenue),
-                          subValue: '${_storeRevenues.length} cửa hàng hoạt động',
-                          icon: Icons.payments_rounded,
-                          color: AppColors.blue700,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _AdminKpiMiniCard(
-                          label: 'Đơn hàng & Nhân sự',
-                          value: '$totalOrders đơn',
-                          subValue: 'Đi làm: $totalWorking/$totalStaff NV',
-                          icon: Icons.receipt_long_rounded,
-                          color: const Color(0xFF15803D),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Thanh so sánh tỷ trọng doanh thu giữa các cửa hàng
-                  if (!_isLoading && filteredStores.isNotEmpty) ...[
-                    _StoreRevenueShareCard(
-                      stores: filteredStores,
-                      totalRevenue: totalRevenue,
-                      revenueGetter: _revenueForPeriod,
-                      periodLabel: _periodLabel,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Danh sách Cửa hàng hiện có (${filteredStores.length})',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: _loadRevenueData,
-                        icon: const Icon(Icons.refresh_rounded, size: 16),
-                        label: const Text('Làm mới'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-
-                  if (_isLoading)
-                    const Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (filteredStores.isEmpty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: AppColors.line),
-                      ),
-                      child: const Column(
-                        children: [
-                          Icon(
-                            Icons.store_mall_directory_outlined,
-                            size: 40,
-                            color: AppColors.muted,
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Không tìm thấy cửa hàng phù hợp.',
-                            style: TextStyle(color: AppColors.muted),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    ...filteredStores.map(
-                      (store) => _StoreRevenueCard(
-                        store: store,
-                        periodRevenue: _revenueForPeriod(store),
-                        periodOrders: _ordersForPeriod(store),
-                        periodLabel: _periodLabel,
-                        onTap: () => _showStoreRevenueDetailSheet(store),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-class _CollapsingAdminHeader extends SliverPersistentHeaderDelegate {
-  const _CollapsingAdminHeader({
+class _CollapsingAdminHomeHeader extends SliverPersistentHeaderDelegate {
+  const _CollapsingAdminHomeHeader({
     required this.userName,
+    required this.storeCount,
+    required this.totalRevenue,
+    required this.totalOrders,
+    required this.totalWorking,
+    required this.totalStaff,
+    required this.periodLabel,
     required this.onOpenMenu,
     required this.onRefreshTap,
-    required this.onLogoutTap,
+    required this.onOpenFunctions,
     required this.searchController,
     required this.onSearchChanged,
+    required this.searchQuery,
     required this.topInset,
-    required this.totalRevenue,
-    required this.storeCount,
-    required this.totalOrders,
-    required this.periodLabel,
+    required this.bannerController,
+    required this.bannerIndex,
+    required this.onBannerChanged,
   });
 
   final String userName;
+  final int storeCount;
+  final int totalRevenue;
+  final int totalOrders;
+  final int totalWorking;
+  final int totalStaff;
+  final String periodLabel;
   final VoidCallback onOpenMenu;
   final VoidCallback onRefreshTap;
-  final VoidCallback onLogoutTap;
+  final VoidCallback onOpenFunctions;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
+  final String searchQuery;
   final double topInset;
-  final int totalRevenue;
-  final int storeCount;
-  final int totalOrders;
-  final String periodLabel;
+  final PageController bannerController;
+  final int bannerIndex;
+  final ValueChanged<int> onBannerChanged;
 
   @override
-  double get minExtent => topInset + 100;
+  double get minExtent => topInset + 106;
 
   @override
-  double get maxExtent => 326 + topInset;
+  double get maxExtent => topInset + 324;
 
   @override
   Widget build(
@@ -488,675 +583,678 @@ class _CollapsingAdminHeader extends SliverPersistentHeaderDelegate {
     final progress = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
     final bottomRadius = Radius.circular(28 - (10 * progress));
     final searchTop = topInset + 80 - 52 * progress;
-    final informationTop = topInset + 8 - 25 * progress;
+    final bannerOpacity = (1 - progress * 1.35).clamp(0.0, 1.0);
 
-    return Material(
-      elevation: overlapsContent ? 3 : 0,
-      shadowColor: AppColors.blue900.withValues(alpha: 0.14),
-      child: ClipRect(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final blueHeight = (constraints.maxHeight - 84)
-                .clamp(minExtent, maxExtent)
-                .toDouble();
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  height: blueHeight,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppColors.blue900, AppColors.blue700],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.vertical(bottom: bottomRadius),
-                    ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.blue900, AppColors.blue800, AppColors.blue700],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: bottomRadius),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.blue900.withValues(alpha: 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Hàng trên cùng: Menu + Tiêu đề Hệ thống Quản trị + Làm mới
+          Positioned(
+            top: topInset + 12,
+            left: 16,
+            right: 16,
+            child: Opacity(
+              opacity: (1 - progress * 1.6).clamp(0.0, 1.0),
+              child: Row(
+                children: [
+                  _AdminRoundHeaderIcon(
+                    icon: Icons.menu_rounded,
+                    onTap: onOpenMenu,
                   ),
-                ),
-                // Thẻ Banner Tổng quan Doanh thu Chuỗi Cửa hàng (thay cho PromoBanner)
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 0,
-                  height: 168,
-                  child: Opacity(
-                    opacity: (1 - progress * 1.25).clamp(0.0, 1.0),
-                    child: IgnorePointer(
-                      ignoring: progress > 0.7,
-                      child: _AdminSystemRevenueBanner(
-                        totalRevenue: totalRevenue,
-                        storeCount: storeCount,
-                        totalOrders: totalOrders,
-                        periodLabel: periodLabel,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
                       ),
-                    ),
-                  ),
-                ),
-                // Hàng thông tin Admin + Nút mở Menu chức năng Admin (loại bỏ địa chỉ giao hàng)
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  top: informationTop,
-                  child: Opacity(
-                    opacity: (1 - progress * 1.45).clamp(0.0, 1.0),
-                    child: IgnorePointer(
-                      ignoring: progress > 0.82,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.22),
+                        ),
+                      ),
                       child: Row(
                         children: [
-                          SmartMartLogo(
-                            compact: true,
-                            logoSize: 60,
-                            onTap: onOpenMenu,
-                            onDark: true,
-                          ),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'SSM4 ADMIN',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.5,
-                                  ),
-                                ),
-                                Text(
-                                  userName.isNotEmpty
-                                      ? 'Quản trị viên: $userName'
-                                      : 'Quản trị hệ thống chuỗi cửa hàng',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFFD6E8FF),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          IconButton(
-                            tooltip: 'Menu chức năng Admin',
-                            onPressed: onOpenMenu,
-                            style: IconButton.styleFrom(
-                              backgroundColor:
-                                  Colors.white.withValues(alpha: 0.14),
-                              foregroundColor: Colors.white,
-                              side: BorderSide(
-                                color: Colors.white.withValues(alpha: 0.35),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            icon: const Icon(Icons.menu_rounded),
+                          const Icon(
+                            Icons.admin_panel_settings_rounded,
+                            color: Color(0xFFFFD58A),
+                            size: 18,
                           ),
                           const SizedBox(width: 8),
-                          IconButton(
-                            tooltip: 'Đăng xuất',
-                            onPressed: onLogoutTap,
-                            style: IconButton.styleFrom(
-                              backgroundColor:
-                                  Colors.white.withValues(alpha: 0.14),
-                              foregroundColor: Colors.white,
-                              side: BorderSide(
-                                color: Colors.white.withValues(alpha: 0.35),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                          Expanded(
+                            child: Text(
+                              'Hệ thống Quản trị SSM4 • ${userName.isNotEmpty ? userName : "Admin"}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                            icon: const Icon(Icons.logout_rounded),
                           ),
                         ],
                       ),
                     ),
                   ),
-                ),
-                // Thanh tìm kiếm cửa hàng trên trang chủ Admin
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  top: searchTop,
-                  height: 56,
-                  child: SearchField(
-                    controller: searchController,
-                    onChanged: onSearchChanged,
-                    hintText: 'Tìm cửa hàng, địa chỉ hoặc người quản lý...',
+                  const SizedBox(width: 8),
+                  _AdminRoundHeaderIcon(
+                    icon: Icons.sync_rounded,
+                    onTap: onRefreshTap,
                   ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(_CollapsingAdminHeader oldDelegate) =>
-      oldDelegate.userName != userName ||
-      oldDelegate.totalRevenue != totalRevenue ||
-      oldDelegate.storeCount != storeCount ||
-      oldDelegate.totalOrders != totalOrders ||
-      oldDelegate.periodLabel != periodLabel;
-}
-
-class _AdminSystemRevenueBanner extends StatelessWidget {
-  const _AdminSystemRevenueBanner({
-    required this.totalRevenue,
-    required this.storeCount,
-    required this.totalOrders,
-    required this.periodLabel,
-  });
-
-  final int totalRevenue;
-  final int storeCount;
-  final int totalOrders;
-  final String periodLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F294A), Color(0xFF1E4E8C)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.blue900.withValues(alpha: 0.18),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.orange,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  'DOANH THU CHUỖI CỬA HÀNG • ${periodLabel.toUpperCase()}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
+                  const SizedBox(width: 8),
+                  _AdminRoundHeaderIcon(
+                    icon: Icons.grid_view_rounded,
+                    onTap: onOpenFunctions,
                   ),
-                ),
+                ],
               ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.greenAccent.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
+            ),
+          ),
+
+          // Carousel Banner Quản trị Hệ thống (thay thế banner khuyến mãi khách hàng)
+          Positioned(
+            top: topInset + 148,
+            left: 0,
+            right: 0,
+            height: 158,
+            child: IgnorePointer(
+              ignoring: bannerOpacity < 0.15,
+              child: Opacity(
+                opacity: bannerOpacity,
+                child: Column(
                   children: [
-                    Icon(
-                      Icons.trending_up_rounded,
-                      color: Colors.greenAccent,
-                      size: 14,
+                    Expanded(
+                      child: PageView(
+                        controller: bannerController,
+                        onPageChanged: onBannerChanged,
+                        children: [
+                          _AdminHeroBannerCard(
+                            badge: 'TỔNG DOANH THU ($periodLabel)',
+                            title: formatCurrency(totalRevenue),
+                            subtitle:
+                                '$totalOrders đơn hoàn tất tại $storeCount cơ sở cửa hàng đang hoạt động',
+                            icon: Icons.query_stats_rounded,
+                            accentColor: const Color(0xFF00B4D8),
+                          ),
+                          _AdminHeroBannerCard(
+                            badge: 'NHÂN SỰ & CHẤM CÔNG HÔM NAY',
+                            title: '$totalWorking / $totalStaff Nhân viên',
+                            subtitle:
+                                'Đang làm việc tại các cơ sở Cửa hàng & Kho trung tâm SSM4',
+                            icon: Icons.fact_check_rounded,
+                            accentColor: const Color(0xFF10B981),
+                          ),
+                        ],
+                      ),
                     ),
-                    SizedBox(width: 4),
-                    Text(
-                      '+12.4%',
-                      style: TextStyle(
-                        color: Colors.greenAccent,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        2,
+                        (idx) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 220),
+                          width: idx == bannerIndex ? 18 : 6,
+                          height: 6,
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          decoration: BoxDecoration(
+                            color: idx == bannerIndex
+                                ? Colors.white
+                                : Colors.white54,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-          Text(
-            formatVnd(totalRevenue),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 27,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
             ),
           ),
-          Row(
-            children: [
-              const Icon(
-                Icons.storefront_rounded,
-                color: Color(0xFFD6E8FF),
-                size: 16,
+
+          // Thanh tìm kiếm cửa hàng ghim khi cuộn (giống HomeScreen)
+          Positioned(
+            top: searchTop,
+            left: 16,
+            right: 16,
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(26),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.blue900.withValues(alpha: 0.14),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
-              const SizedBox(width: 5),
-              Text(
-                '$storeCount cửa hàng đang hoạt động',
-                style: const TextStyle(
-                  color: Color(0xFFD6E8FF),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Row(
+                children: [
+                  const Icon(Icons.search_rounded, color: AppColors.blue700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: searchController,
+                      onChanged: onSearchChanged,
+                      decoration: const InputDecoration(
+                        isCollapsed: true,
+                        border: InputBorder.none,
+                        hintText:
+                            'Tìm cửa hàng, địa chỉ hoặc quản lý phụ trách...',
+                        hintStyle: TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (searchQuery.isNotEmpty)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () {
+                        searchController.clear();
+                        onSearchChanged('');
+                      },
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                ],
               ),
-              const Spacer(),
-              const Icon(
-                Icons.shopping_bag_outlined,
-                color: Color(0xFFFFD58A),
-                size: 15,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '$totalOrders đơn hoàn tất',
-                style: const TextStyle(
-                  color: Color(0xFFFFD58A),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
+
+  @override
+  bool shouldRebuild(covariant _CollapsingAdminHomeHeader oldDelegate) => true;
 }
 
-class _AdminQuickFunctionGrid extends StatelessWidget {
-  const _AdminQuickFunctionGrid({required this.onSelectBottomTab});
+class _AdminRoundHeaderIcon extends StatelessWidget {
+  const _AdminRoundHeaderIcon({required this.icon, required this.onTap});
 
-  final ValueChanged<int> onSelectBottomTab;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.16),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminHeroBannerCard extends StatelessWidget {
+  const _AdminHeroBannerCard({
+    required this.badge,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.accentColor,
+  });
+
+  final String badge;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      badge,
+                      style: const TextStyle(
+                        color: Color(0xFFFFE599),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFDCEBFA),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(icon, color: Colors.white, size: 30),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminQuickModulesRow extends StatelessWidget {
+  const _AdminQuickModulesRow({
+    required this.onOpenWarehouse,
+    required this.onOpenStore,
+    required this.onOpenSupplier,
+    required this.onOpenEmployee,
+    required this.onOpenStatistics,
+  });
+
+  final VoidCallback onOpenWarehouse;
+  final VoidCallback onOpenStore;
+  final VoidCallback onOpenSupplier;
+  final VoidCallback onOpenEmployee;
+  final VoidCallback onOpenStatistics;
 
   @override
   Widget build(BuildContext context) {
     final items = <(IconData, String, Color, Color, VoidCallback)>[
       (
-        Icons.badge_rounded,
-        'Quản lý hồ sơ\nnhân viên',
-        const Color(0xFFEFF6FF),
-        AppColors.blue700,
-        () => onSelectBottomTab(2),
+        Icons.warehouse_rounded,
+        'QL Kho',
+        const Color(0xFFECFDF5),
+        const Color(0xFF059669),
+        onOpenWarehouse,
       ),
       (
-        Icons.fact_check_rounded,
-        'Chấm công\nnhân viên',
-        const Color(0xFFF0FDF4),
-        const Color(0xFF15803D),
-        () => onSelectBottomTab(3),
-      ),
-      (
-        Icons.person_add_alt_1_rounded,
-        'Tạo tài khoản\nnhân viên',
-        const Color(0xFFF5F3FF),
-        const Color(0xFF6D28D9),
-        () => onSelectBottomTab(4),
+        Icons.storefront_rounded,
+        'QL Cửa hàng',
+        const Color(0xFFFFF7ED),
+        const Color(0xFFEA580C),
+        onOpenStore,
       ),
       (
         Icons.business_rounded,
-        'Quản lý\nnhà cung cấp',
-        const Color(0xFFFFFBEB),
-        const Color(0xFFB45309),
-        () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const SupplierListScreen(userRole: 'ADMIN'),
-            ),
-          );
-        },
+        'Nhà cung cấp',
+        const Color(0xFFEFF6FF),
+        AppColors.blue700,
+        onOpenSupplier,
       ),
       (
-        Icons.inventory_2_rounded,
-        'Nhập hàng từ\nnhà cung cấp',
-        const Color(0xFFECFEFF),
-        const Color(0xFF0E7490),
-        () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const GoodsReceiptsScreen(userRole: 'ADMIN'),
-            ),
-          );
-        },
+        Icons.groups_rounded,
+        'QL Nhân viên',
+        const Color(0xFFF5F3FF),
+        const Color(0xFF7C3AED),
+        onOpenEmployee,
       ),
       (
-        Icons.add_circle_outline_rounded,
-        'Tạo phiếu\nnhập kho mới',
-        const Color(0xFFFFF1F2),
-        const Color(0xFFBE123C),
-        () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const CreateGoodsReceiptScreen(userRole: 'ADMIN'),
-            ),
-          );
-        },
+        Icons.bar_chart_rounded,
+        'QL Thống kê',
+        const Color(0xFFFEF2F2),
+        const Color(0xFFDC2626),
+        onOpenStatistics,
       ),
     ];
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 1.05,
-      ),
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: item.$5,
-          child: Ink(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.line),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: item.$3,
-                  child: Icon(item.$1, color: item.$4, size: 22),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  item.$2,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _AdminKpiMiniCard extends StatelessWidget {
-  const _AdminKpiMiniCard({
-    required this.label,
-    required this.value,
-    required this.subValue,
-    required this.icon,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final String subValue;
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.muted,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subValue,
-            style: const TextStyle(fontSize: 10, color: AppColors.muted),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StoreRevenueShareCard extends StatelessWidget {
-  const _StoreRevenueShareCard({
-    required this.stores,
-    required this.totalRevenue,
-    required this.revenueGetter,
-    required this.periodLabel,
-  });
-
-  final List<StoreRevenueSummary> stores;
-  final int totalRevenue;
-  final int Function(StoreRevenueSummary) revenueGetter;
-  final String periodLabel;
-
-  static const _barColors = <Color>[
-    AppColors.blue700,
-    Color(0xFF15803D),
-    Color(0xFFB45309),
-    Color(0xFF6D28D9),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Tỷ trọng doanh thu theo cửa hàng ($periodLabel)',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          ...List.generate(stores.length, (index) {
-            final store = stores[index];
-            final rev = revenueGetter(store);
-            final ratio = totalRevenue <= 0
-                ? 0.0
-                : (rev / totalRevenue).clamp(0.0, 1.0);
-            final color = _barColors[index % _barColors.length];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: items
+          .map(
+            (item) => Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: item.$5,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: Text(
-                          store.storeName,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: item.$3,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: item.$4.withValues(alpha: 0.2),
                           ),
                         ),
+                        child: Icon(item.$1, color: item.$4, size: 26),
                       ),
+                      const SizedBox(height: 6),
                       Text(
-                        '${formatVnd(rev)} (${(ratio * 100).toStringAsFixed(1)}%)',
-                        style: TextStyle(
+                        item.$2,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        style: const TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: color,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 5),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(
-                      value: ratio,
-                      minHeight: 8,
-                      backgroundColor: AppColors.blue50,
-                      color: color,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            );
-          }),
-        ],
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _PeriodFilterChip extends StatelessWidget {
+  const _PeriodFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.blue700 : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.blue700 : AppColors.line,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : AppColors.ink,
+          ),
+        ),
       ),
     );
   }
 }
 
-class _StoreRevenueCard extends StatelessWidget {
-  const _StoreRevenueCard({
-    required this.store,
-    required this.periodRevenue,
-    required this.periodOrders,
-    required this.periodLabel,
-    required this.onTap,
+class _DashboardMetricTile extends StatelessWidget {
+  const _DashboardMetricTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.subLabel,
+    required this.tint,
+    required this.iconColor,
+    this.onTap,
   });
 
-  final StoreRevenueSummary store;
-  final int periodRevenue;
-  final int periodOrders;
-  final String periodLabel;
-  final VoidCallback onTap;
+  final IconData icon;
+  final String label;
+  final String value;
+  final String subLabel;
+  final Color tint;
+  final Color iconColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: AppColors.line),
-      ),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(15),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.line),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    width: 34,
+                    height: 34,
                     decoration: BoxDecoration(
-                      color: AppColors.blue50,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(
-                      Icons.storefront_rounded,
-                      color: AppColors.blue700,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          store.storeName,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          store.address,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.muted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
+                      color: tint,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(
-                      '+${store.growthPercent.toStringAsFixed(1)}%',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.green.shade800,
-                      ),
-                    ),
+                    child: Icon(icon, color: iconColor, size: 19),
                   ),
+                  const Spacer(),
+                  if (onTap != null)
+                    const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 12,
+                      color: AppColors.muted,
+                    ),
                 ],
               ),
-              const Divider(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
+              const SizedBox(height: 10),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: iconColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StoreDashboardCard extends StatelessWidget {
+  const _StoreDashboardCard({
+    required this.summary,
+    required this.periodRevenue,
+    required this.periodOrders,
+    required this.periodLabel,
+    required this.onOpenDetail,
+    required this.onOpenWorkspace,
+  });
+
+  final StoreRevenueSummary summary;
+  final int periodRevenue;
+  final int periodOrders;
+  final String periodLabel;
+  final VoidCallback onOpenDetail;
+  final VoidCallback onOpenWorkspace;
+
+  @override
+  Widget build(BuildContext context) {
+    final progressPct = (summary.targetProgress * 100).toStringAsFixed(0);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.line),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.blue900.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.blue50,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  color: AppColors.blue700,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      summary.storeName,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      summary.address,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFECFDF5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '+${summary.growthPercent.toStringAsFixed(1)}%',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF059669),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
@@ -1168,95 +1266,139 @@ class _StoreRevenueCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        formatVnd(periodRevenue),
+                        formatCurrency(periodRevenue),
                         style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.blue800,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.blue900,
                         ),
                       ),
                     ],
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                ),
+                Container(width: 1, height: 32, color: AppColors.line),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Số đơn / Nhân sự trực',
+                        'Đơn hàng & Tồn kệ',
                         style: TextStyle(fontSize: 11, color: AppColors.muted),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '$periodOrders đơn • ${store.workingTodayCount}/${store.staffCount} NV',
+                        '$periodOrders đơn • ${summary.stockQuantity} SP',
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
                         ),
                       ),
                     ],
                   ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(
+                Icons.person_pin_rounded,
+                size: 15,
+                color: AppColors.blue700,
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(99),
-                      child: LinearProgressIndicator(
-                        value: store.targetProgress,
-                        minHeight: 6,
-                        backgroundColor: AppColors.blue50,
-                        color: AppColors.blue700,
-                      ),
-                    ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  'QL: ${summary.managerName} • Đi làm: ${summary.workingTodayCount}/${summary.staffCount} NV',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'KPI tháng: ${(store.targetProgress * 100).toStringAsFixed(0)}%',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.muted,
-                    ),
-                  ),
-                ],
+                ),
+              ),
+              Text(
+                'KPI tháng: $progressPct%',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.blue700,
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: summary.targetProgress,
+              minHeight: 6,
+              backgroundColor: AppColors.blue50,
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.blue700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onOpenDetail,
+                  icon: const Icon(Icons.analytics_outlined, size: 16),
+                  label: const Text('Thông tin cửa hàng'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onOpenWorkspace,
+                  icon: const Icon(Icons.store_mall_directory_rounded, size: 16),
+                  label: const Text('Quản lý cửa hàng'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-class _DetailMetricRow extends StatelessWidget {
-  const _DetailMetricRow({
+class _InfoRowItem extends StatelessWidget {
+  const _InfoRowItem({
     required this.label,
     required this.value,
-    this.highlight = false,
+    required this.icon,
   });
 
   final String label;
   final String value;
-  final bool highlight;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+          Icon(icon, size: 18, color: AppColors.blue700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
           ),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 13,
-              fontWeight: highlight ? FontWeight.w900 : FontWeight.w700,
-              color: highlight ? AppColors.blue800 : AppColors.ink,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
             ),
           ),
         ],
@@ -1266,41 +1408,62 @@ class _DetailMetricRow extends StatelessWidget {
 }
 
 // =============================================================================
-// 2. MÀN HÌNH MENU CÁC CHỨC NĂNG CỦA ADMIN (TRONG THANH ĐIỀU HƯỚNG DƯỚI)
+// 2. TAB "CHỨC NĂNG" TRÊN THANH ĐIỀU HƯỚNG (5 CHỨC NĂNG LỚN CỦA ADMIN)
+//    1. Quản lý Kho
+//    2. Quản lý Cửa hàng
+//    3. Quản lý Nhà cung cấp
+//    4. Quản lý Nhân viên
+//    5. Quản lý Thống kê
 // =============================================================================
 
 class AdminFunctionsMenuScreen extends StatelessWidget {
   const AdminFunctionsMenuScreen({
+    required this.userName,
+    required this.staffController,
     required this.onSelectBottomTab,
     super.key,
   });
 
+  final String userName;
+  final StaffController staffController;
   final ValueChanged<int> onSelectBottomTab;
+
+  void _open(BuildContext context, Widget page) {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
       children: [
+        // Banner giới thiệu 5 phân hệ
         Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [AppColors.blue900, AppColors.blue700],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.blue900.withValues(alpha: 0.16),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: const Row(
             children: [
               CircleAvatar(
-                radius: 24,
-                backgroundColor: Colors.white24,
+                radius: 26,
+                backgroundColor: Color(0x33FFFFFF),
                 child: Icon(
                   Icons.apps_rounded,
                   color: Colors.white,
-                  size: 26,
+                  size: 28,
                 ),
               ),
               SizedBox(width: 14),
@@ -1309,21 +1472,29 @@ class AdminFunctionsMenuScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'DANH MỤC CHỨC NĂNG ADMIN',
+                      'TRUNG TÂM ĐIỀU HÀNH ADMIN',
                       style: TextStyle(
-                        color: Color(0xFFD6E8FF),
+                        color: Color(0xFFFFD58A),
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
+                        letterSpacing: 1.0,
                       ),
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'Quản lý Chuỗi cung ứng & Nhân sự',
+                      '5 Phân hệ Quản lý Trọng tâm',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 16,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Chọn chức năng để điều phối kho, cửa hàng, nhà cung cấp, nhân sự và thống kê toàn chuỗi.',
+                      style: TextStyle(
+                        color: Color(0xFFDCEBFA),
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -1333,103 +1504,673 @@ class AdminFunctionsMenuScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        const Text(
-          'Quản lý Nhà cung cấp & Nhập kho',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+
+        // 1. QUẢN LÝ KHO
+        _BigFeatureModuleCard(
+          indexNumber: '01',
+          icon: Icons.warehouse_rounded,
+          title: 'Quản lý Kho hàng',
+          subtitle:
+              'Phiếu nhập hàng từ NCC, lập phiếu nhập mới, duyệt phiếu yêu cầu từ cửa hàng, thêm sản phẩm & tồn kho.',
+          tags: const [
+            'Phiếu nhập NCC',
+            'Duyệt xuất kho',
+            'Tồn kho dự trữ',
+          ],
+          accentColor: const Color(0xFF059669),
+          tintColor: const Color(0xFFECFDF5),
+          onTap: () => _open(
+            context,
+            AdminWarehouseManagementScreen(
+              userName: userName,
+              staffController: staffController,
+            ),
+          ),
         ),
-        const SizedBox(height: 10),
-        _AdminFunctionMenuTile(
+        const SizedBox(height: 14),
+
+        // 2. QUẢN LÝ CỬA HÀNG
+        _BigFeatureModuleCard(
+          indexNumber: '02',
+          icon: Icons.storefront_rounded,
+          title: 'Quản lý Cửa hàng',
+          subtitle:
+              'Vận hành cửa hàng POS, kiểm soát tồn kệ trưng bày, lập và theo dõi phiếu yêu cầu tiếp hàng từ kho.',
+          tags: const [
+            'Bán hàng POS',
+            'Tồn kệ cửa hàng',
+            'Phiếu yêu cầu hàng',
+          ],
+          accentColor: const Color(0xFFEA580C),
+          tintColor: const Color(0xFFFFF7ED),
+          onTap: () => _open(
+            context,
+            AdminStoreManagementHubScreen(
+              userName: userName,
+              staffController: staffController,
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 3. QUẢN LÝ NHÀ CUNG CẤP
+        _BigFeatureModuleCard(
+          indexNumber: '03',
           icon: Icons.business_rounded,
-          title: 'Quản lý nhà cung cấp',
-          subtitle: 'Xem danh sách, tìm kiếm và thêm nhà cung cấp mới',
-          tint: const Color(0xFFEFF6FF),
-          iconColor: AppColors.blue700,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const SupplierListScreen(
-                  userRole: 'ADMIN',
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        _AdminFunctionMenuTile(
-          icon: Icons.inventory_2_rounded,
-          title: 'Nhập hàng từ nhà cung cấp',
-          subtitle: 'Xem tất cả phiếu nhập toàn hệ thống, theo dõi tiến độ',
-          tint: const Color(0xFFF0FDF4),
-          iconColor: const Color(0xFF15803D),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const GoodsReceiptsScreen(
-                  userRole: 'ADMIN',
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        _AdminFunctionMenuTile(
-          icon: Icons.add_circle_outline_rounded,
-          title: 'Tạo phiếu nhập kho mới',
-          subtitle: 'Lập phiếu nhập hàng từ nhà cung cấp vào kho được chọn',
-          tint: const Color(0xFFFFFBEB),
-          iconColor: const Color(0xFFB45309),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const CreateGoodsReceiptScreen(
-                  userRole: 'ADMIN',
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 20),
-        const Text(
-          'Quản lý Nhân sự & Chấm công',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 10),
-        _AdminFunctionMenuTile(
-          icon: Icons.badge_rounded,
-          title: 'Quản lý hồ sơ nhân viên',
+          title: 'Quản lý Nhà cung cấp',
           subtitle:
-              'Xem và sửa thông tin nhân viên: Tên, Email, SĐT, Chức vụ (Role), Cơ sở làm việc',
-          tint: const Color(0xFFEFF6FF),
-          iconColor: AppColors.blue700,
-          onTap: () => onSelectBottomTab(2),
+              'Danh bạ đối tác cung ứng hàng hóa, thêm mới, chỉnh sửa thông tin liên hệ và kích hoạt/ngừng hợp tác.',
+          tags: const [
+            'Danh sách NCC',
+            'Thêm / Sửa NCC',
+            'Trạng thái hợp tác',
+          ],
+          accentColor: AppColors.blue700,
+          tintColor: const Color(0xFFEFF6FF),
+          onTap: () => _open(
+            context,
+            const SupplierListScreen(userRole: 'ADMIN'),
+          ),
         ),
-        const SizedBox(height: 10),
-        _AdminFunctionMenuTile(
-          icon: Icons.fact_check_rounded,
-          title: 'Chấm công cho nhân viên',
+        const SizedBox(height: 14),
+
+        // 4. QUẢN LÝ NHÂN VIÊN
+        _BigFeatureModuleCard(
+          indexNumber: '04',
+          icon: Icons.groups_rounded,
+          title: 'Quản lý Nhân viên',
           subtitle:
-              'Quản lý số ngày công đã chấm, danh sách nhân viên theo từng cơ sở, đánh dấu đang đi làm / không đi làm',
-          tint: const Color(0xFFF0FDF4),
-          iconColor: const Color(0xFF15803D),
-          onTap: () => onSelectBottomTab(3),
+              'Chấm công nhân viên theo từng cơ sở (Đang làm / Đang nghỉ), quản lý & sửa tài khoản nhân viên, tạo tài khoản mới.',
+          tags: const [
+            'Chấm công theo cơ sở',
+            'Sửa tài khoản NV',
+            'Tạo tài khoản NV',
+          ],
+          accentColor: const Color(0xFF7C3AED),
+          tintColor: const Color(0xFFF5F3FF),
+          onTap: () => _open(
+            context,
+            const AdminEmployeeManagementHubScreen(),
+          ),
         ),
-        const SizedBox(height: 10),
-        _AdminFunctionMenuTile(
-          icon: Icons.person_add_alt_1_rounded,
-          title: 'Tạo tài khoản cho nhân viên',
+        const SizedBox(height: 14),
+
+        // 5. QUẢN LÝ THỐNG KÊ
+        _BigFeatureModuleCard(
+          indexNumber: '05',
+          icon: Icons.insert_chart_outlined_rounded,
+          title: 'Quản lý Thống kê',
           subtitle:
-              'Tạo tài khoản đăng nhập mới cho nhân viên và phân công về Cửa hàng / Kho',
-          tint: const Color(0xFFF5F3FF),
-          iconColor: const Color(0xFF6D28D9),
-          onTap: () => onSelectBottomTab(4),
+              'Theo dõi lượng hàng tồn kệ/tồn kho, sức chứa, lượng nhập vào và lượng bán ra/xuất kho của từng cơ sở Kho & Cửa hàng.',
+          tags: const [
+            'Lượng hàng cơ sở',
+            'Lượng bán & Xuất kho',
+            'Báo cáo doanh thu',
+          ],
+          accentColor: const Color(0xFFDC2626),
+          tintColor: const Color(0xFFFEF2F2),
+          onTap: () => _open(
+            context,
+            const AdminStatisticsScreen(),
+          ),
         ),
       ],
     );
   }
 }
 
-class _AdminFunctionMenuTile extends StatelessWidget {
-  const _AdminFunctionMenuTile({
+class _BigFeatureModuleCard extends StatelessWidget {
+  const _BigFeatureModuleCard({
+    required this.indexNumber,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.tags,
+    required this.accentColor,
+    required this.tintColor,
+    required this.onTap,
+  });
+
+  final String indexNumber;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final List<String> tags;
+  final Color accentColor;
+  final Color tintColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: accentColor.withValues(alpha: 0.22)),
+            boxShadow: [
+              BoxShadow(
+                color: accentColor.withValues(alpha: 0.06),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: tintColor,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(icon, color: accentColor, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: tintColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'PHÂN HỆ $indexNumber',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: accentColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: tintColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.arrow_forward_rounded,
+                      color: accentColor,
+                      size: 18,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  color: AppColors.muted,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: tags
+                    .map(
+                      (t) => Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.line),
+                        ),
+                        child: Text(
+                          t,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// 2.1. PHÂN HỆ 01: QUẢN LÝ KHO HÀNG (GIỮ NGUYÊN CHỨC NĂNG CŨ, NÂNG CẤP UI)
+// =============================================================================
+
+class AdminWarehouseManagementScreen extends StatelessWidget {
+  const AdminWarehouseManagementScreen({
+    required this.userName,
+    required this.staffController,
+    super.key,
+  });
+
+  final String userName;
+  final StaffController staffController;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        title: const Text('Quản lý Kho hàng'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF065F46), Color(0xFF059669)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: const Row(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: Color(0x33FFFFFF),
+                  child: Icon(
+                    Icons.warehouse_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ĐIỀU PHỐI KHO TRUNG TÂM',
+                        style: TextStyle(
+                          color: Color(0xFFA7F3D0),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Hệ thống Quản lý Kho & Nhập xuất',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Nhập hàng từ nhà cung cấp, duyệt yêu cầu từ cửa hàng và quản lý danh mục sản phẩm.',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          _SubFeatureActionTile(
+            icon: Icons.inventory_2_rounded,
+            title: 'Phiếu nhập hàng từ Nhà cung cấp',
+            subtitle:
+                'Xem toàn bộ phiếu nhập kho, lọc theo trạng thái nháp / hoàn tất / đã hủy',
+            tint: const Color(0xFFECFDF5),
+            iconColor: const Color(0xFF059669),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const GoodsReceiptsScreen(userRole: 'ADMIN'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _SubFeatureActionTile(
+            icon: Icons.add_circle_outline_rounded,
+            title: 'Tạo phiếu nhập kho mới',
+            subtitle:
+                'Lập phiếu nhập hàng mới từ nhà cung cấp vào kho trung tâm được chọn',
+            tint: const Color(0xFFFFFBEB),
+            iconColor: const Color(0xFFB45309),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    const CreateGoodsReceiptScreen(userRole: 'ADMIN'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _SubFeatureActionTile(
+            icon: Icons.assignment_turned_in_rounded,
+            title: 'Phiếu yêu cầu hàng từ Cửa hàng',
+            subtitle:
+                'Duyệt số lượng, từ chối hoặc xác nhận xuất kho giao hàng cho cửa hàng',
+            tint: AppColors.blue50,
+            iconColor: AppColors.blue700,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    const WarehouseRestockRequestsScreen(userRole: 'ADMIN'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _SubFeatureActionTile(
+            icon: Icons.add_box_rounded,
+            title: 'Thêm sản phẩm mới vào Kho',
+            subtitle:
+                'Tạo mặt hàng mới, gán mã vạch, giá nhập/bán và khởi tạo tồn kho ban đầu',
+            tint: const Color(0xFFF5F3FF),
+            iconColor: const Color(0xFF7C3AED),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    KhoAddProductScreen(controller: staffController),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _SubFeatureActionTile(
+            icon: Icons.dashboard_customize_rounded,
+            title: 'Giao diện Nghiệp vụ Kho đầy đủ',
+            subtitle:
+                'Mở toàn bộ không gian làm việc của nhân viên kho (Tồn kho, Nhập kho, Chuyển kệ)',
+            tint: const Color(0xFFF0FDF4),
+            iconColor: const Color(0xFF15803D),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => WarehouseStaffWorkspace(
+                  controller: staffController,
+                  staffName: userName,
+                  userRole: 'ADMIN',
+                  onExit: () => Navigator.of(context).pop(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// 2.2. PHÂN HỆ 02 & TAB "CỬA HÀNG": QUẢN LÝ CỬA HÀNG (GIỮ NGUYÊN LOGIC CŨ + UI ĐẸP)
+// =============================================================================
+
+class AdminStoreManagementHubScreen extends StatelessWidget {
+  const AdminStoreManagementHubScreen({
+    required this.userName,
+    required this.staffController,
+    super.key,
+  });
+
+  final String userName;
+  final StaffController staffController;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        title: const Text('Quản lý Cửa hàng'),
+      ),
+      body: AdminStoresTabScreen(
+        userName: userName,
+        staffController: staffController,
+      ),
+    );
+  }
+}
+
+class AdminStoresTabScreen extends StatefulWidget {
+  const AdminStoresTabScreen({
+    required this.userName,
+    required this.staffController,
+    super.key,
+  });
+
+  final String userName;
+  final StaffController staffController;
+
+  @override
+  State<AdminStoresTabScreen> createState() => _AdminStoresTabScreenState();
+}
+
+class _AdminStoresTabScreenState extends State<AdminStoresTabScreen> {
+  final EmployeeManagementService _service = EmployeeManagementService();
+  List<StoreRevenueSummary> _stores = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _service.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final list = await _service.getStoreRevenueSummaries();
+      if (!mounted) return;
+      setState(() {
+        _stores = list;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF9A3412), Color(0xFFEA580C)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: const Row(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: Color(0x33FFFFFF),
+                  child: Icon(
+                    Icons.storefront_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'HỆ THỐNG CỬA HÀNG BÁN LẺ',
+                        style: TextStyle(
+                          color: Color(0xFFFED7AA),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Quản lý Cửa hàng & Nghiệp vụ POS',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Bán hàng tại quầy, kiểm tra tồn kệ và lập phiếu yêu cầu xuất hàng từ kho.',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Chức năng Nghiệp vụ Cửa hàng',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _SubFeatureActionTile(
+            icon: Icons.point_of_sale_rounded,
+            title: 'Giao diện Cửa hàng & Bán hàng POS đầy đủ',
+            subtitle:
+                'Toàn bộ chức năng cửa hàng: Bán hàng tại quầy, Tồn kệ trưng bày, Chuyển hàng lên kệ',
+            tint: const Color(0xFFFFF7ED),
+            iconColor: const Color(0xFFEA580C),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => StoreStaffWorkspace(
+                  controller: widget.staffController,
+                  staffName: widget.userName,
+                  userRole: 'ADMIN',
+                  onExit: () => Navigator.of(context).pop(),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _SubFeatureActionTile(
+            icon: Icons.assignment_outlined,
+            title: 'Danh sách Phiếu yêu cầu hàng của Cửa hàng',
+            subtitle:
+                'Xem tiến độ các phiếu yêu cầu tiếp hàng từ kho và xác nhận nhận hàng vào kệ',
+            tint: AppColors.blue50,
+            iconColor: AppColors.blue700,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const RestockRequestsScreen(userRole: 'ADMIN'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _SubFeatureActionTile(
+            icon: Icons.add_shopping_cart_rounded,
+            title: 'Tạo Phiếu yêu cầu hàng mới',
+            subtitle:
+                'Lập phiếu yêu cầu xuất hàng từ kho trung tâm về cửa hàng được chọn',
+            tint: const Color(0xFFECFDF5),
+            iconColor: const Color(0xFF059669),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    const CreateRestockRequestScreen(userRole: 'ADMIN'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Danh sách Cơ sở Cửa hàng (${_stores.length})',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            ..._stores.map(
+              (s) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _StoreDashboardCard(
+                  summary: s,
+                  periodRevenue: s.monthRevenue,
+                  periodOrders: s.monthOrders,
+                  periodLabel: 'Tháng này',
+                  onOpenDetail: () {},
+                  onOpenWorkspace: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => StoreStaffWorkspace(
+                        controller: widget.staffController,
+                        staffName: widget.userName,
+                        userRole: 'ADMIN',
+                        onExit: () => Navigator.of(context).pop(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubFeatureActionTile extends StatelessWidget {
+  const _SubFeatureActionTile({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -1447,21 +2188,27 @@ class _AdminFunctionMenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: AppColors.line),
-      ),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(15),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.line),
+          ),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: tint,
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: tint,
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: Icon(icon, color: iconColor, size: 24),
               ),
               const SizedBox(width: 14),
@@ -1472,15 +2219,16 @@ class _AdminFunctionMenuTile extends StatelessWidget {
                     Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         color: AppColors.muted,
                       ),
                     ),
@@ -1497,28 +2245,183 @@ class _AdminFunctionMenuTile extends StatelessWidget {
 }
 
 // =============================================================================
-// 3. QUẢN LÝ HỒ SƠ NHÂN VIÊN (XEM & SỬA TÊN, EMAIL, SĐT, CHỨC VỤ ROLE, CƠ SỞ LÀM VIỆC)
+// 3. PHÂN HỆ 04: QUẢN LÝ NHÂN VIÊN (GỒM 3 CHỨC NĂNG CON)
+//    1. Chấm công cho nhân viên (theo từng cơ sở, đánh dấu Đang làm / Đang nghỉ)
+//    2. Quản lý tài khoản nhân viên (xem, sửa Tên, Email, Chức vụ, Nơi làm việc)
+//    3. Tạo tài khoản cho nhân viên (giao diện UI hoàn chỉnh)
 // =============================================================================
 
-class AdminStaffProfileManagementScreen extends StatefulWidget {
-  const AdminStaffProfileManagementScreen({super.key});
+class AdminEmployeeManagementHubScreen extends StatefulWidget {
+  const AdminEmployeeManagementHubScreen({
+    this.initialSubTab = 0,
+    super.key,
+  });
+
+  final int initialSubTab;
 
   @override
-  State<AdminStaffProfileManagementScreen> createState() =>
-      _AdminStaffProfileManagementScreenState();
+  State<AdminEmployeeManagementHubScreen> createState() =>
+      _AdminEmployeeManagementHubScreenState();
 }
 
-class _AdminStaffProfileManagementScreenState
-    extends State<AdminStaffProfileManagementScreen> {
-  final EmployeeManagementService _service = EmployeeManagementService();
+class _AdminEmployeeManagementHubScreenState
+    extends State<AdminEmployeeManagementHubScreen> {
+  late int _subTab;
 
+  @override
+  void initState() {
+    super.initState();
+    _subTab = widget.initialSubTab.clamp(0, 2);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = <Widget>[
+      const AdminAttendanceScreen(embedded: true),
+      const AdminStaffProfileManagementScreen(embedded: true),
+      const AdminCreateEmployeeScreen(embedded: true),
+    ];
+
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        title: const Text('Quản lý Nhân viên'),
+      ),
+      body: Column(
+        children: [
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _EmployeeSubTabButton(
+                    icon: Icons.fact_check_rounded,
+                    label: 'Chấm công NV',
+                    selected: _subTab == 0,
+                    onTap: () => setState(() => _subTab = 0),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _EmployeeSubTabButton(
+                    icon: Icons.manage_accounts_rounded,
+                    label: 'QL Tài khoản NV',
+                    selected: _subTab == 1,
+                    onTap: () => setState(() => _subTab = 1),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _EmployeeSubTabButton(
+                    icon: Icons.person_add_alt_1_rounded,
+                    label: 'Tạo TK NV',
+                    selected: _subTab == 2,
+                    onTap: () => setState(() => _subTab = 2),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: IndexedStack(
+              index: _subTab,
+              children: pages,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmployeeSubTabButton extends StatelessWidget {
+  const _EmployeeSubTabButton({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.blue700 : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: selected ? Colors.white : AppColors.blue900,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : AppColors.ink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// 3.1. CHỨC NĂNG CON 1: CHẤM CÔNG CHO NHÂN VIÊN THEO TỪNG CƠ SỞ
+//      (Đánh dấu Đang làm / Đang nghỉ trực tiếp trên từng nhân viên + Quản lý ngày công)
+// =============================================================================
+
+class AdminAttendanceScreen extends StatefulWidget {
+  const AdminAttendanceScreen({
+    this.embedded = false,
+    super.key,
+  });
+
+  final bool embedded;
+
+  @override
+  State<AdminAttendanceScreen> createState() => _AdminAttendanceScreenState();
+}
+
+class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
+  final EmployeeManagementService _service = EmployeeManagementService();
+  final TextEditingController _searchController = TextEditingController();
+
+  DateTime _selectedDate = DateTime.now();
   List<EmployeeRecord> _employees = [];
   List<BranchLocation> _stores = [];
   List<BranchLocation> _warehouses = [];
+  Map<String, bool> _workingMap = {};
+  Map<String, TimesheetPayrollRecord> _timesheetMap = {};
+
   bool _isLoading = true;
+  String _selectedFacilityFilter = 'ALL';
+  String _statusFilter = 'ALL'; // 'ALL' | 'WORKING' | 'OFF'
   String _searchQuery = '';
-  String _roleFilter = 'ALL';
-  String _facilityFilter = 'ALL';
+
+  String get _monthYear =>
+      '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}';
 
   @override
   void initState() {
@@ -1528,6 +2431,7 @@ class _AdminStaffProfileManagementScreenState
 
   @override
   void dispose() {
+    _searchController.dispose();
     _service.dispose();
     super.dispose();
   }
@@ -1536,741 +2440,37 @@ class _AdminStaffProfileManagementScreenState
     setState(() => _isLoading = true);
     try {
       final results = await Future.wait([
+        _service.getEmployees(),
         _service.getStores(),
         _service.getWarehouses(),
-        _service.getEmployees(),
-      ]);
-      if (!mounted) return;
-      setState(() {
-        _stores = results[0] as List<BranchLocation>;
-        _warehouses = results[1] as List<BranchLocation>;
-        _employees = results[2] as List<EmployeeRecord>;
-        _isLoading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-    }
-  }
-
-  List<EmployeeRecord> get _filteredEmployees {
-    final q = _searchQuery.trim().toLowerCase();
-    return _employees.where((e) {
-      if (_roleFilter != 'ALL' && e.role != _roleFilter) return false;
-      if (_facilityFilter != 'ALL' && e.facilityGroupName != _facilityFilter) {
-        return false;
-      }
-      if (q.isNotEmpty) {
-        final match = e.fullName.toLowerCase().contains(q) ||
-            e.email.toLowerCase().contains(q) ||
-            e.phone.toLowerCase().contains(q) ||
-            e.code.toLowerCase().contains(q) ||
-            e.branchDisplay.toLowerCase().contains(q);
-        if (!match) return false;
-      }
-      return true;
-    }).toList();
-  }
-
-  List<String> get _facilityNames {
-    final set = <String>{};
-    for (final e in _employees) {
-      set.add(e.facilityGroupName);
-    }
-    return set.toList();
-  }
-
-  /// Mở hộp thoại Xem & Sửa thông tin nhân viên:
-  /// Tên, Email, SĐT, Chức vụ (liên quan đến role), Cơ sở làm việc.
-  Future<void> _showEditEmployeeProfileDialog(EmployeeRecord emp) async {
-    final nameCtrl = TextEditingController(text: emp.fullName);
-    final emailCtrl = TextEditingController(text: emp.email);
-    final phoneCtrl = TextEditingController(text: emp.phone);
-
-    String selectedRole = emp.role;
-    String? selectedStoreId =
-        emp.storeId ?? (_stores.isNotEmpty ? _stores.first.id : null);
-    String? selectedWarehouseId =
-        emp.warehouseId ?? (_warehouses.isNotEmpty ? _warehouses.first.id : null);
-    bool isActive = emp.isActive;
-    bool isSaving = false;
-    String? errorMsg;
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final isStoreRole =
-              selectedRole == 'store_manager' || selectedRole == 'sales';
-          final isWarehouseRole =
-              selectedRole == 'kho_manager' || selectedRole == 'kho';
-
-          return AlertDialog(
-            title: Row(
-              children: [
-                const Icon(Icons.edit_note_rounded, color: AppColors.blue700),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Sửa hồ sơ: ${emp.fullName}',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                ),
-              ],
-            ),
-            content: SizedBox(
-              width: 420,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (errorMsg != null)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          errorMsg!,
-                          style: TextStyle(
-                            color: Colors.red.shade800,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    TextField(
-                      controller: nameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Họ và tên nhân viên *',
-                        prefixIcon: Icon(Icons.person_outline_rounded),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email công việc *',
-                        prefixIcon: Icon(Icons.mail_outline_rounded),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: phoneCtrl,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Số điện thoại *',
-                        prefixIcon: Icon(Icons.phone_android_rounded),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Chức vụ (Role hệ thống) *',
-                        prefixIcon: Icon(Icons.badge_outlined),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedRole,
-                          isDense: true,
-                          isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'sales',
-                              child: Text('Nhân viên Bán hàng (sales)'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'store_manager',
-                              child: Text('Quản lý Cửa hàng (store_manager)'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'kho',
-                              child: Text('Nhân viên Kho (kho)'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'kho_manager',
-                              child: Text('Quản lý Kho (kho_manager)'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'admin',
-                              child: Text('Quản trị viên (admin)'),
-                            ),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setDialogState(() => selectedRole = val);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (isStoreRole && _stores.isNotEmpty)
-                      InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Cơ sở làm việc (Cửa hàng) *',
-                          prefixIcon: Icon(Icons.storefront_rounded),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _stores.any((s) => s.id == selectedStoreId)
-                                ? selectedStoreId
-                                : _stores.first.id,
-                            isDense: true,
-                            isExpanded: true,
-                            items: _stores
-                                .map(
-                                  (s) => DropdownMenuItem(
-                                    value: s.id,
-                                    child: Text(s.name),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (val) =>
-                                setDialogState(() => selectedStoreId = val),
-                          ),
-                        ),
-                      ),
-                    if (isWarehouseRole && _warehouses.isNotEmpty)
-                      InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Cơ sở làm việc (Kho hàng) *',
-                          prefixIcon: Icon(Icons.warehouse_rounded),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _warehouses
-                                    .any((w) => w.id == selectedWarehouseId)
-                                ? selectedWarehouseId
-                                : _warehouses.first.id,
-                            isDense: true,
-                            isExpanded: true,
-                            items: _warehouses
-                                .map(
-                                  (w) => DropdownMenuItem(
-                                    value: w.id,
-                                    child: Text(w.name),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (val) =>
-                                setDialogState(() => selectedWarehouseId = val),
-                          ),
-                        ),
-                      ),
-                    if (selectedRole == 'admin')
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.blue50,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Text(
-                          'Cơ sở làm việc: Toàn hệ thống (Trụ sở chính SSM4)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.blue800,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        'Trạng thái tài khoản hoạt động',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      subtitle: Text(
-                        isActive ? 'Đang kích hoạt' : 'Đang tạm khóa',
-                        style: const TextStyle(fontSize: 11),
-                      ),
-                      value: isActive,
-                      onChanged: (val) => setDialogState(() => isActive = val),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: isSaving ? null : () => Navigator.pop(dialogCtx),
-                child: const Text('Hủy'),
-              ),
-              FilledButton.icon(
-                onPressed: isSaving
-                    ? null
-                    : () async {
-                        if (nameCtrl.text.trim().isEmpty ||
-                            emailCtrl.text.trim().isEmpty) {
-                          setDialogState(() {
-                            errorMsg = 'Vui lòng nhập đầy đủ Tên và Email.';
-                          });
-                          return;
-                        }
-                        setDialogState(() {
-                          isSaving = true;
-                          errorMsg = null;
-                        });
-                        try {
-                          final updated = await _service.updateEmployee(
-                            id: emp.id,
-                            fullName: nameCtrl.text.trim(),
-                            phone: phoneCtrl.text.trim(),
-                            email: emailCtrl.text.trim(),
-                            role: selectedRole,
-                            storeId: isStoreRole ? selectedStoreId : null,
-                            warehouseId:
-                                isWarehouseRole ? selectedWarehouseId : null,
-                            isActive: isActive,
-                          );
-                          if (!dialogCtx.mounted) return;
-                          Navigator.pop(dialogCtx);
-                          if (!mounted) return;
-                          setState(() {
-                            final idx = _employees
-                                .indexWhere((item) => item.id == emp.id);
-                            if (idx >= 0) {
-                              _employees[idx] = updated;
-                            }
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Đã cập nhật hồ sơ nhân viên ${updated.fullName}!',
-                              ),
-                              backgroundColor: Colors.green[700],
-                            ),
-                          );
-                        } catch (e) {
-                          setDialogState(() {
-                            isSaving = false;
-                            errorMsg = e.toString();
-                          });
-                        }
-                      },
-                icon: const Icon(Icons.save_rounded, size: 18),
-                label: Text(isSaving ? 'Đang lưu...' : 'Lưu thông tin'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final list = _filteredEmployees;
-    final facilities = _facilityNames;
-
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-        children: [
-          // Header tóm tắt
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.blue900, AppColors.blue700],
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                const CircleAvatar(
-                  radius: 22,
-                  backgroundColor: Colors.white24,
-                  child: Icon(Icons.badge_rounded, color: Colors.white),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Quản lý Hồ sơ Nhân viên',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Tổng cộng ${_employees.length} nhân sự • Xem & sửa Tên, Email, SĐT, Chức vụ, Cơ sở',
-                        style: const TextStyle(
-                          color: Color(0xFFD6E8FF),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: _loadData,
-                  icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Tìm kiếm
-          TextField(
-            onChanged: (v) => setState(() => _searchQuery = v),
-            decoration: const InputDecoration(
-              hintText: 'Tìm theo tên, email, SĐT, mã nhân viên hoặc cơ sở...',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Bộ lọc Chức vụ & Cơ sở làm việc
-          Row(
-            children: [
-              Expanded(
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Lọc theo Chức vụ',
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _roleFilter,
-                      isDense: true,
-                      isExpanded: true,
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'ALL',
-                          child: Text('Tất cả chức vụ', style: TextStyle(fontSize: 12)),
-                        ),
-                        DropdownMenuItem(
-                          value: 'store_manager',
-                          child: Text('Quản lý Cửa hàng', style: TextStyle(fontSize: 12)),
-                        ),
-                        DropdownMenuItem(
-                          value: 'sales',
-                          child: Text('NV Bán hàng', style: TextStyle(fontSize: 12)),
-                        ),
-                        DropdownMenuItem(
-                          value: 'kho_manager',
-                          child: Text('Quản lý Kho', style: TextStyle(fontSize: 12)),
-                        ),
-                        DropdownMenuItem(
-                          value: 'kho',
-                          child: Text('NV Kho', style: TextStyle(fontSize: 12)),
-                        ),
-                        DropdownMenuItem(
-                          value: 'admin',
-                          child: Text('Quản trị viên', style: TextStyle(fontSize: 12)),
-                        ),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) setState(() => _roleFilter = v);
-                      },
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Cơ sở làm việc',
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: facilities.contains(_facilityFilter)
-                          ? _facilityFilter
-                          : 'ALL',
-                      isDense: true,
-                      isExpanded: true,
-                      items: [
-                        const DropdownMenuItem(
-                          value: 'ALL',
-                          child: Text('Tất cả cơ sở', style: TextStyle(fontSize: 12)),
-                        ),
-                        ...facilities.map(
-                          (f) => DropdownMenuItem(
-                            value: f,
-                            child: Text(
-                              f,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        ),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) setState(() => _facilityFilter = v);
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (list.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(28),
-              child: Center(
-                child: Text(
-                  'Không tìm thấy hồ sơ nhân viên phù hợp.',
-                  style: TextStyle(color: AppColors.muted),
-                ),
-              ),
-            )
-          else
-            ...list.map(
-              (emp) => Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  side: const BorderSide(color: AppColors.line),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(15),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 22,
-                            backgroundColor: AppColors.blue50,
-                            child: Text(
-                              emp.fullName.isNotEmpty
-                                  ? emp.fullName[0].toUpperCase()
-                                  : 'N',
-                              style: const TextStyle(
-                                color: AppColors.blue800,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  emp.fullName,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Mã NV: ${emp.code}  •  Role: ${emp.role}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.muted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 9,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: emp.isActive
-                                  ? Colors.green.shade50
-                                  : Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              emp.isActive ? 'Hoạt động' : 'Đã khóa',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: emp.isActive
-                                    ? Colors.green.shade800
-                                    : Colors.red.shade800,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Divider(height: 18),
-                      _ProfileFieldLine(
-                        icon: Icons.badge_outlined,
-                        label: 'Chức vụ',
-                        value: emp.roleLabel,
-                      ),
-                      _ProfileFieldLine(
-                        icon: Icons.location_city_rounded,
-                        label: 'Cơ sở làm việc',
-                        value: emp.branchDisplay,
-                      ),
-                      _ProfileFieldLine(
-                        icon: Icons.mail_outline_rounded,
-                        label: 'Email',
-                        value: emp.email.isNotEmpty ? emp.email : 'Chưa cập nhật',
-                      ),
-                      _ProfileFieldLine(
-                        icon: Icons.phone_android_rounded,
-                        label: 'Số điện thoại',
-                        value: emp.phone.isNotEmpty ? emp.phone : 'Chưa cập nhật',
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.tonalIcon(
-                          onPressed: () => _showEditEmployeeProfileDialog(emp),
-                          icon: const Icon(Icons.edit_rounded, size: 17),
-                          label: const Text(
-                            'Xem & Sửa thông tin nhân viên',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileFieldLine extends StatelessWidget {
-  const _ProfileFieldLine({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: AppColors.blue700),
-          const SizedBox(width: 8),
-          Text(
-            '$label: ',
-            style: const TextStyle(fontSize: 12, color: AppColors.muted),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// 4. CHẤM CÔNG CHO NHÂN VIÊN:
-//    - Quản lý số ngày công nhân viên đó đã chấm công
-//    - Hiển thị danh sách nhân viên đang làm việc theo từng cơ sở
-//    - Có nút đánh dấu Đang đi làm / Không đi làm để kiểm soát nhân viên
-// =============================================================================
-
-class AdminAttendanceScreen extends StatefulWidget {
-  const AdminAttendanceScreen({super.key});
-
-  @override
-  State<AdminAttendanceScreen> createState() => _AdminAttendanceScreenState();
-}
-
-class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
-  final EmployeeManagementService _service = EmployeeManagementService();
-
-  List<EmployeeRecord> _employees = [];
-  Map<String, bool> _workingTodayByEmpId = {};
-  Map<String, TimesheetPayrollRecord> _timesheetByEmpId = {};
-  bool _isLoading = true;
-  String _selectedFacility = 'ALL';
-  String _searchQuery = '';
-  DateTime _selectedDate = DateTime.now();
-
-  String get _monthKey =>
-      '${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAttendanceData();
-  }
-
-  @override
-  void dispose() {
-    _service.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadAttendanceData() async {
-    setState(() => _isLoading = true);
-    try {
-      final results = await Future.wait([
-        _service.getEmployees(),
         _service.getShifts(startDate: _selectedDate, endDate: _selectedDate),
-        _service.getTimesheets(monthYear: _monthKey),
+        _service.getTimesheets(monthYear: _monthYear),
       ]);
+
       if (!mounted) return;
       final emps = results[0] as List<EmployeeRecord>;
-      final shifts = results[1] as List<WorkShiftRecord>;
-      final timesheets = results[2] as List<TimesheetPayrollRecord>;
+      final stores = results[1] as List<BranchLocation>;
+      final warehouses = results[2] as List<BranchLocation>;
+      final shifts = results[3] as List<WorkShiftRecord>;
+      final timesheets = results[4] as List<TimesheetPayrollRecord>;
 
-      final workingMap = <String, bool>{};
+      final wMap = <String, bool>{};
       for (final emp in emps) {
-        final shift =
+        final foundShift =
             shifts.where((s) => s.employeeId == emp.id).firstOrNull;
-        workingMap[emp.id] =
-            shift != null ? shift.shiftCode != 'OFF' : emp.isActive;
+        wMap[emp.id] = foundShift != null ? foundShift.isWorking : emp.isActive;
       }
 
-      final tsMap = <String, TimesheetPayrollRecord>{};
-      for (final ts in timesheets) {
-        tsMap[ts.employeeId] = ts;
-      }
+      final tsMap = <String, TimesheetPayrollRecord>{
+        for (final t in timesheets) t.employeeId: t,
+      };
 
       setState(() {
         _employees = emps;
-        _workingTodayByEmpId = workingMap;
-        _timesheetByEmpId = tsMap;
+        _stores = stores;
+        _warehouses = warehouses;
+        _workingMap = wMap;
+        _timesheetMap = tsMap;
         _isLoading = false;
       });
     } catch (_) {
@@ -2279,202 +2479,219 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
     }
   }
 
-  int _workDaysOf(EmployeeRecord emp) {
-    return _timesheetByEmpId[emp.id]?.workDays ?? 22;
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2024),
+      lastDate: DateTime(2030),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedDate = picked);
+      await _loadData();
+    }
   }
 
-  /// Đánh dấu nhân viên Đang đi làm (`true`) hoặc Không đi làm (`false`)
-  /// đồng thời tự động cập nhật số ngày công của nhân viên đó.
-  Future<void> _setWorkingStatus(EmployeeRecord emp, bool isWorking) async {
-    final prev = _workingTodayByEmpId[emp.id] ?? true;
-    if (prev == isWorking) return;
+  Future<void> _setWorkingStatus(EmployeeRecord emp, bool nextWorking) async {
+    final prevWorking = _workingMap[emp.id] ?? emp.isActive;
+    if (prevWorking == nextWorking) return;
 
-    final currentDays = _workDaysOf(emp);
-    final nextDays = isWorking
-        ? (currentDays + 1).clamp(0, 31)
-        : (currentDays - 1).clamp(0, 31);
+    final currentSheet = _timesheetMap[emp.id];
+    final currentDays = currentSheet?.workDays ?? emp.workDays;
+    final nextDays = (currentDays + (nextWorking ? 1 : -1)).clamp(0, 31);
 
     setState(() {
-      _workingTodayByEmpId[emp.id] = isWorking;
-      final existingTs = _timesheetByEmpId[emp.id];
-      if (existingTs != null) {
-        _timesheetByEmpId[emp.id] = existingTs.copyWith(
+      _workingMap[emp.id] = nextWorking;
+      if (currentSheet != null) {
+        _timesheetMap[emp.id] = currentSheet.copyWith(
           workDays: nextDays,
           totalHours: nextDays * 8.0,
         );
       }
     });
 
-    try {
-      final ts = _timesheetByEmpId[emp.id];
-      final syncedDays = await _service.markAttendanceStatus(
-        employee: emp,
-        workDate: _selectedDate,
-        monthYear: _monthKey,
-        isWorking: isWorking,
-        nextWorkDays: nextDays,
-        currentTimesheet: ts,
-      );
-      if (mounted && ts != null) {
-        setState(() {
-          _timesheetByEmpId[emp.id] = ts.copyWith(
-            workDays: syncedDays,
-            totalHours: syncedDays * 8.0,
-          );
-        });
-      }
-    } catch (_) {}
+    final savedDays = await _service.markAttendanceStatus(
+      employee: emp,
+      workDate: _selectedDate,
+      monthYear: _monthYear,
+      isWorking: nextWorking,
+      nextWorkDays: nextDays,
+      currentTimesheet: currentSheet,
+    );
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 2),
-        content: Text(
-          isWorking
-              ? 'Đã đánh dấu ${emp.fullName}: ĐANG ĐI LÀM (Tổng công: $nextDays ngày)'
-              : 'Đã đánh dấu ${emp.fullName}: KHÔNG ĐI LÀM (Tổng công: $nextDays ngày)',
-        ),
-        backgroundColor: isWorking ? Colors.green[700] : Colors.orange[800],
-      ),
-    );
-  }
-
-  /// Điều chỉnh trực tiếp số ngày công nhân viên đã chấm công.
-  Future<void> _adjustWorkDays(EmployeeRecord emp, int newWorkDays) async {
-    final clamped = newWorkDays.clamp(0, 31);
-    final ts = _timesheetByEmpId[emp.id];
-    if (ts != null) {
+    if (currentSheet != null && savedDays != nextDays) {
       setState(() {
-        _timesheetByEmpId[emp.id] = ts.copyWith(
-          workDays: clamped,
-          totalHours: clamped * 8.0,
+        _timesheetMap[emp.id] = currentSheet.copyWith(
+          workDays: savedDays,
+          totalHours: savedDays * 8.0,
         );
       });
     }
-    try {
-      final updated = await _service.updateEmployeeWorkDays(
-        employee: emp,
-        monthYear: _monthKey,
-        workDays: clamped,
-        currentTimesheet: ts,
-      );
-      if (mounted && updated != null) {
-        setState(() => _timesheetByEmpId[emp.id] = updated);
-      }
-    } catch (_) {}
+
+    showSmartMartNotice(
+      context,
+      message: nextWorking
+          ? 'Đã đánh dấu ${emp.fullName}: ĐANG LÀM (${emp.facilityGroupName})'
+          : 'Đã đánh dấu ${emp.fullName}: ĐANG NGHỈ (${emp.facilityGroupName})',
+      icon: nextWorking
+          ? Icons.check_circle_rounded
+          : Icons.pause_circle_filled_rounded,
+    );
   }
 
   Future<void> _showEditWorkDaysDialog(EmployeeRecord emp) async {
-    final ctrl = TextEditingController(text: '${_workDaysOf(emp)}');
-    final result = await showDialog<int>(
+    final sheet = _timesheetMap[emp.id];
+    int tempDays = sheet?.workDays ?? emp.workDays;
+
+    final confirmed = await showDialog<int>(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: Text('Quản lý ngày công: ${emp.fullName}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Cơ sở: ${emp.facilityGroupName}',
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Số ngày công đã chấm trong tháng ($_monthKey)',
-                suffixText: 'ngày công',
-                prefixIcon: const Icon(Icons.calendar_month_rounded),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          title: Text(
+            'Quản lý ngày công • ${emp.fullName}',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Cơ sở: ${emp.facilityGroupName}\nKỳ chấm công: Tháng $_monthYear',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
               ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton.filledTonal(
+                    onPressed: () => setDialogState(
+                      () => tempDays = (tempDays - 1).clamp(0, 31),
+                    ),
+                    icon: const Icon(Icons.remove_rounded),
+                  ),
+                  const SizedBox(width: 20),
+                  Text(
+                    '$tempDays / 26 ngày',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.blue900,
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  IconButton.filledTonal(
+                    onPressed: () => setDialogState(
+                      () => tempDays = (tempDays + 1).clamp(0, 31),
+                    ),
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Hủy'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(tempDays),
+              child: const Text('Lưu ngày công'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Hủy'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final val = int.tryParse(ctrl.text.trim());
-              if (val != null) Navigator.pop(dialogCtx, val);
-            },
-            child: const Text('Lưu số ngày công'),
-          ),
-        ],
       ),
     );
-    if (result != null && mounted) {
-      await _adjustWorkDays(emp, result);
+
+    if (confirmed != null && mounted) {
+      final updated = await _service.updateEmployeeWorkDays(
+        employee: emp,
+        monthYear: _monthYear,
+        workDays: confirmed,
+        currentTimesheet: sheet,
+      );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Đã cập nhật số ngày công của ${emp.fullName}: $result ngày công',
-          ),
-          backgroundColor: AppColors.blue700,
-        ),
+      setState(() {
+        if (updated != null) {
+          _timesheetMap[emp.id] = updated;
+        }
+      });
+      showSmartMartNotice(
+        context,
+        message: 'Đã cập nhật $confirmed ngày công cho ${emp.fullName}.',
+        icon: Icons.event_available_rounded,
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final facilities = <String>{
+    final facilityNames = <String>{
+      'ALL',
+      for (final s in _stores) s.name,
+      for (final w in _warehouses) w.name,
       for (final e in _employees) e.facilityGroupName,
     }.toList();
 
-    final q = _searchQuery.trim().toLowerCase();
     final filtered = _employees.where((e) {
-      if (_selectedFacility != 'ALL' &&
-          e.facilityGroupName != _selectedFacility) {
+      if (_selectedFacilityFilter != 'ALL' &&
+          e.facilityGroupName != _selectedFacilityFilter) {
         return false;
       }
-      if (q.isNotEmpty) {
+      final working = _workingMap[e.id] ?? e.isActive;
+      if (_statusFilter == 'WORKING' && !working) return false;
+      if (_statusFilter == 'OFF' && working) return false;
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim().toLowerCase();
         return e.fullName.toLowerCase().contains(q) ||
+            e.email.toLowerCase().contains(q) ||
             e.code.toLowerCase().contains(q) ||
-            e.roleLabel.toLowerCase().contains(q);
+            e.facilityGroupName.toLowerCase().contains(q);
       }
       return true;
     }).toList();
 
-    // Gom nhóm nhân viên theo từng cơ sở làm việc
-    final groupedByFacility = <String, List<EmployeeRecord>>{};
+    // Gom nhóm nhân viên theo từng cơ sở
+    final Map<String, List<EmployeeRecord>> groupedByFacility = {};
     for (final emp in filtered) {
-      final group = emp.facilityGroupName;
-      groupedByFacility.putIfAbsent(group, () => []).add(emp);
+      groupedByFacility
+          .putIfAbsent(emp.facilityGroupName, () => <EmployeeRecord>[])
+          .add(emp);
     }
 
-    final workingCount = _employees
-        .where((e) => _workingTodayByEmpId[e.id] ?? true)
-        .length;
-    final absentCount = _employees.length - workingCount;
+    final totalCount = filtered.length;
+    final workingCount =
+        filtered.where((e) => _workingMap[e.id] ?? e.isActive).length;
+    final offCount = totalCount - workingCount;
 
-    return RefreshIndicator(
-      onRefresh: _loadAttendanceData,
+    final body = RefreshIndicator(
+      onRefresh: _loadData,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 90),
         children: [
-          // Thẻ tổng quan chấm công & kiểm soát quân số
+          // Header chọn ngày & Thống kê Đi làm / Đang nghỉ
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [AppColors.blue900, AppColors.blue700],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(22),
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     const Icon(
-                      Icons.fact_check_rounded,
-                      color: Colors.white,
-                      size: 24,
+                      Icons.calendar_today_rounded,
+                      color: Color(0xFFFFD58A),
+                      size: 20,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -2482,43 +2699,33 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Chấm công & Kiểm soát Nhân viên',
+                            'CHẤM CÔNG NHÂN VIÊN THEO CƠ SỞ',
                             style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
+                              color: Color(0xFFFFD58A),
+                              fontSize: 10,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
+                          const SizedBox(height: 2),
                           Text(
-                            'Ngày kiểm soát: ${_selectedDate.day.toString().padLeft(2, '0')}/${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.year} • Kỳ công $_monthKey',
+                            'Ngày ${_selectedDate.day.toString().padLeft(2, '0')}/${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.year}',
                             style: const TextStyle(
-                              color: Color(0xFFD6E8FF),
-                              fontSize: 11,
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
+                    FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.18),
                         foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white38),
-                        visualDensity: VisualDensity.compact,
                       ),
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _selectedDate,
-                          firstDate: DateTime(2025),
-                          lastDate: DateTime(2028),
-                        );
-                        if (picked != null) {
-                          setState(() => _selectedDate = picked);
-                          _loadAttendanceData();
-                        }
-                      },
-                      icon: const Icon(Icons.calendar_today_rounded, size: 14),
-                      label: const Text('Đổi ngày', style: TextStyle(fontSize: 11)),
+                      onPressed: _pickDate,
+                      icon: const Icon(Icons.edit_calendar_rounded, size: 16),
+                      label: const Text('Đổi ngày'),
                     ),
                   ],
                 ),
@@ -2528,24 +2735,24 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                     Expanded(
                       child: _AttendanceCountBadge(
                         label: 'Tổng nhân sự',
-                        count: _employees.length,
+                        count: totalCount,
                         color: Colors.white,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: _AttendanceCountBadge(
-                        label: 'Đang đi làm',
+                        label: 'Đang làm',
                         count: workingCount,
-                        color: Colors.greenAccent,
+                        color: const Color(0xFF6EE7B7),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: _AttendanceCountBadge(
-                        label: 'Không đi làm',
-                        count: absentCount,
-                        color: const Color(0xFFFFB4A2),
+                        label: 'Đang nghỉ',
+                        count: offCount,
+                        color: const Color(0xFFFCA5A5),
                       ),
                     ),
                   ],
@@ -2553,77 +2760,91 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-          // Bộ lọc theo từng cơ sở & Tìm kiếm
-          Row(
-            children: [
-              Expanded(
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Chọn Cơ sở làm việc',
-                    prefixIcon: Icon(Icons.storefront_rounded, size: 18),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: facilities.contains(_selectedFacility)
-                          ? _selectedFacility
-                          : 'ALL',
-                      isDense: true,
-                      isExpanded: true,
-                      items: [
-                        const DropdownMenuItem(
-                          value: 'ALL',
-                          child: Text(
-                            'Tất cả cơ sở làm việc',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                        ...facilities.map(
-                          (f) => DropdownMenuItem(
-                            value: f,
-                            child: Text(
-                              f,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        ),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) setState(() => _selectedFacility = v);
-                      },
-                    ),
-                  ),
-                ),
+          // Tìm kiếm nhân viên
+          TextField(
+            controller: _searchController,
+            onChanged: (v) => setState(() => _searchQuery = v),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search_rounded),
+              hintText: 'Tìm tên nhân viên, mã NV hoặc tên cơ sở...',
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppColors.line),
               ),
-            ],
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppColors.line),
+              ),
+            ),
           ),
           const SizedBox(height: 10),
-          TextField(
-            onChanged: (v) => setState(() => _searchQuery = v),
-            decoration: const InputDecoration(
-              hintText: 'Tìm tên hoặc mã nhân viên trong cơ sở...',
-              prefixIcon: Icon(Icons.search_rounded),
+
+          // Bộ lọc Cơ sở làm việc
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: facilityNames.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final f = facilityNames[index];
+                final selected = _selectedFacilityFilter == f;
+                return ChoiceChip(
+                  label: Text(f == 'ALL' ? 'Tất cả cơ sở' : f),
+                  selected: selected,
+                  onSelected: (_) =>
+                      setState(() => _selectedFacilityFilter = f),
+                );
+              },
             ),
+          ),
+          const SizedBox(height: 8),
+
+          // Bộ lọc Trạng thái Đang làm / Đang nghỉ
+          Row(
+            children: [
+              _PeriodFilterChip(
+                label: 'Tất cả ($totalCount)',
+                selected: _statusFilter == 'ALL',
+                onTap: () => setState(() => _statusFilter = 'ALL'),
+              ),
+              const SizedBox(width: 8),
+              _PeriodFilterChip(
+                label: 'Đang làm ($workingCount)',
+                selected: _statusFilter == 'WORKING',
+                onTap: () => setState(() => _statusFilter = 'WORKING'),
+              ),
+              const SizedBox(width: 8),
+              _PeriodFilterChip(
+                label: 'Đang nghỉ ($offCount)',
+                selected: _statusFilter == 'OFF',
+                onTap: () => setState(() => _statusFilter = 'OFF'),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
 
           if (_isLoading)
             const Padding(
-              padding: EdgeInsets.all(32),
+              padding: EdgeInsets.all(40),
               child: Center(child: CircularProgressIndicator()),
             )
           else if (groupedByFacility.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.line),
+              ),
+              child: const Center(
                 child: Text(
-                  'Không có nhân viên nào trong cơ sở đã chọn.',
+                  'Không có nhân viên nào trong cơ sở được chọn.',
                   style: TextStyle(color: AppColors.muted),
                 ),
               ),
@@ -2632,264 +2853,277 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
             ...groupedByFacility.entries.map((entry) {
               final facilityName = entry.key;
               final staffList = entry.value;
-              final workingInFacility = staffList
-                  .where((e) => _workingTodayByEmpId[e.id] ?? true)
+              final facWorking = staffList
+                  .where((e) => _workingMap[e.id] ?? e.isActive)
                   .length;
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.line),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Tiêu đề từng Cơ sở làm việc
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: const BoxDecoration(
-                        color: AppColors.blue50,
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(17),
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.line),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Tiêu đề Cơ sở
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.location_city_rounded,
-                            color: AppColors.blue700,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              facilityName,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.blue900,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 9,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              'Đi làm: $workingInFacility/${staffList.length} NV',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.blue800,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Danh sách nhân viên thuộc Cơ sở này
-                    ...staffList.map((emp) {
-                      final isWorking = _workingTodayByEmpId[emp.id] ?? true;
-                      final workDays = _workDaysOf(emp);
-
-                      return Container(
-                        padding: const EdgeInsets.all(14),
                         decoration: const BoxDecoration(
-                          border: Border(
-                            top: BorderSide(color: AppColors.line),
+                          color: Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(20),
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 19,
-                                  backgroundColor: isWorking
-                                      ? Colors.green.shade50
-                                      : Colors.red.shade50,
-                                  child: Icon(
-                                    isWorking
-                                        ? Icons.check_circle_rounded
-                                        : Icons.cancel_rounded,
-                                    color: isWorking
-                                        ? Colors.green.shade700
-                                        : Colors.red.shade600,
-                                    size: 20,
-                                  ),
+                            Icon(
+                              facilityName.toLowerCase().contains('kho')
+                                  ? Icons.warehouse_rounded
+                                  : Icons.storefront_rounded,
+                              color: AppColors.blue700,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                facilityName,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.ink,
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        emp.fullName,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${emp.roleLabel} • Mã: ${emp.code}',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.muted,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.blue50,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Đi làm: $facWorking/${staffList.length}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.blue700,
                                 ),
-                                // Quản lý số ngày công nhân viên đã chấm công
-                                InkWell(
-                                  borderRadius: BorderRadius.circular(10),
-                                  onTap: () => _showEditWorkDaysDialog(emp),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      // Danh sách nhân viên trong cơ sở
+                      ...staffList.map((emp) {
+                        final isWorking = _workingMap[emp.id] ?? emp.isActive;
+                        final workDays =
+                            _timesheetMap[emp.id]?.workDays ?? emp.workDays;
+                        return Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 22,
+                                    backgroundColor: isWorking
+                                        ? const Color(0xFFECFDF5)
+                                        : const Color(0xFFFEF2F2),
+                                    child: Icon(
+                                      isWorking
+                                          ? Icons.person_pin_circle_rounded
+                                          : Icons.person_off_rounded,
+                                      color: isWorking
+                                          ? const Color(0xFF059669)
+                                          : const Color(0xFFDC2626),
                                     ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.blue50,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: AppColors.blue100,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        const Icon(
-                                          Icons.calendar_month_rounded,
-                                          size: 14,
-                                          color: AppColors.blue700,
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                emp.fullName,
+                                                style: const TextStyle(
+                                                  fontSize: 14.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: AppColors.ink,
+                                                ),
+                                              ),
+                                            ),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 3,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: isWorking
+                                                    ? const Color(0xFFECFDF5)
+                                                    : const Color(0xFFFEF2F2),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              child: Text(
+                                                isWorking
+                                                    ? '● Đang làm'
+                                                    : '○ Đang nghỉ',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: isWorking
+                                                      ? const Color(0xFF059669)
+                                                      : const Color(0xFFDC2626),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(width: 4),
+                                        const SizedBox(height: 3),
                                         Text(
-                                          '$workDays ngày công',
+                                          '${emp.code} • ${emp.roleLabel}',
                                           style: const TextStyle(
                                             fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                            color: AppColors.blue800,
+                                            color: AppColors.muted,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
-                                        const SizedBox(width: 4),
-                                        const Icon(
-                                          Icons.edit_rounded,
-                                          size: 12,
-                                          color: AppColors.blue700,
+                                        const SizedBox(height: 4),
+                                        InkWell(
+                                          onTap: () =>
+                                              _showEditWorkDaysDialog(emp),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                Icons.event_note_rounded,
+                                                size: 14,
+                                                color: AppColors.blue700,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Công tháng $_monthYear: $workDays/26 ngày (Sửa)',
+                                                style: const TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.blue700,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            // Hàng nút đánh dấu Đang đi làm / Không đi làm + Tăng giảm ngày công
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: isWorking
-                                          ? Colors.green.shade700
-                                          : Colors.grey.shade200,
-                                      foregroundColor: isWorking
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    onPressed: () =>
-                                        _setWorkingStatus(emp, true),
-                                    icon: const Icon(
-                                      Icons.check_circle_outline_rounded,
-                                      size: 16,
-                                    ),
-                                    label: const Text(
-                                      'Đang đi làm',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              // 2 Nút đánh dấu Đang làm / Đang nghỉ trực tiếp
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: isWorking
+                                        ? FilledButton.icon(
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: const Color(
+                                                0xFF059669,
+                                              ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                            onPressed: () =>
+                                                _setWorkingStatus(emp, true),
+                                            icon: const Icon(
+                                              Icons.check_circle_rounded,
+                                              size: 16,
+                                            ),
+                                            label: const Text('Đang làm'),
+                                          )
+                                        : OutlinedButton.icon(
+                                            style: OutlinedButton.styleFrom(
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                            onPressed: () =>
+                                                _setWorkingStatus(emp, true),
+                                            icon: const Icon(
+                                              Icons.check_circle_outline_rounded,
+                                              size: 16,
+                                            ),
+                                            label: const Text('Đánh dấu Đi làm'),
+                                          ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: !isWorking
-                                          ? Colors.red.shade600
-                                          : Colors.grey.shade200,
-                                      foregroundColor: !isWorking
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    onPressed: () =>
-                                        _setWorkingStatus(emp, false),
-                                    icon: const Icon(
-                                      Icons.highlight_off_rounded,
-                                      size: 16,
-                                    ),
-                                    label: const Text(
-                                      'Không đi làm',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: !isWorking
+                                        ? FilledButton.icon(
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: const Color(
+                                                0xFFDC2626,
+                                              ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                            onPressed: () =>
+                                                _setWorkingStatus(emp, false),
+                                            icon: const Icon(
+                                              Icons.pause_circle_filled_rounded,
+                                              size: 16,
+                                            ),
+                                            label: const Text('Đang nghỉ'),
+                                          )
+                                        : OutlinedButton.icon(
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: const Color(
+                                                0xFFDC2626,
+                                              ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                            onPressed: () =>
+                                                _setWorkingStatus(emp, false),
+                                            icon: const Icon(
+                                              Icons.pause_circle_outline_rounded,
+                                              size: 16,
+                                            ),
+                                            label: const Text('Đánh dấu Nghỉ'),
+                                          ),
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                IconButton(
-                                  tooltip: 'Giảm 1 ngày công',
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed: () =>
-                                      _adjustWorkDays(emp, workDays - 1),
-                                  icon: const Icon(
-                                    Icons.remove_circle_outline_rounded,
-                                    size: 20,
-                                    color: AppColors.muted,
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: 'Tăng 1 ngày công',
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed: () =>
-                                      _adjustWorkDays(emp, workDays + 1),
-                                  icon: const Icon(
-                                    Icons.add_circle_outline_rounded,
-                                    size: 20,
-                                    color: AppColors.blue700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
                 ),
               );
             }),
         ],
       ),
+    );
+
+    if (widget.embedded) return body;
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(title: const Text('Chấm công cho Nhân viên')),
+      body: body,
     );
   }
 }
@@ -2908,10 +3142,10 @@ class _AttendanceCountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         children: [
@@ -2923,9 +3157,10 @@ class _AttendanceCountBadge extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
+          const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(color: Color(0xFFD6E8FF), fontSize: 10),
+            style: const TextStyle(color: Colors.white70, fontSize: 11),
           ),
         ],
       ),
@@ -2934,125 +3169,61 @@ class _AttendanceCountBadge extends StatelessWidget {
 }
 
 // =============================================================================
-// 5. TẠO TÀI KHOẢN CHO NHÂN VIÊN
+// 3.2. CHỨC NĂNG CON 2: QUẢN LÝ TÀI KHOẢN NHÂN VIÊN
+//      (Xem, tìm kiếm, sửa Tên, Email, SĐT, Chức vụ, Nơi làm việc Cửa hàng/Kho)
 // =============================================================================
 
-class AdminCreateEmployeeScreen extends StatefulWidget {
-  const AdminCreateEmployeeScreen({
-    this.currentUserRole = 'ADMIN',
-    this.assignedStoreId,
-    this.assignedWarehouseId,
-    this.assignedStoreName,
-    this.assignedWarehouseName,
+class AdminStaffProfileManagementScreen extends StatefulWidget {
+  const AdminStaffProfileManagementScreen({
+    this.embedded = false,
     super.key,
   });
 
-  /// Role của người đang thao tác: 'ADMIN', 'STORE_MANAGER', 'WAREHOUSE_MANAGER'
-  final String currentUserRole;
-  final String? assignedStoreId;
-  final String? assignedWarehouseId;
-  final String? assignedStoreName;
-  final String? assignedWarehouseName;
+  final bool embedded;
 
   @override
-  State<AdminCreateEmployeeScreen> createState() =>
-      _AdminCreateEmployeeScreenState();
+  State<AdminStaffProfileManagementScreen> createState() =>
+      _AdminStaffProfileManagementScreenState();
 }
 
-class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
+class _AdminStaffProfileManagementScreenState
+    extends State<AdminStaffProfileManagementScreen> {
   final EmployeeManagementService _service = EmployeeManagementService();
-  final _nameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController(text: '123456');
+  final TextEditingController _searchController = TextEditingController();
 
+  List<EmployeeRecord> _employees = [];
   List<BranchLocation> _stores = [];
   List<BranchLocation> _warehouses = [];
-  List<EmployeeRecord> _recentEmployees = [];
-  String _selectedRole = 'sales';
-  String? _selectedStoreId;
-  String? _selectedWarehouseId;
-  bool _isSubmitting = false;
   bool _isLoading = true;
-
-  bool get _isStoreManager {
-    final clean = widget.currentUserRole.toUpperCase();
-    return clean.contains('STORE_MANAGER');
-  }
-
-  bool get _isWarehouseManager {
-    final clean = widget.currentUserRole.toUpperCase();
-    return clean.contains('WAREHOUSE_MANAGER') || clean.contains('KHO_MANAGER');
-  }
+  String _roleFilter = 'ALL';
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    if (_isStoreManager) {
-      _selectedRole = 'sales';
-      _selectedStoreId = widget.assignedStoreId;
-    } else if (_isWarehouseManager) {
-      _selectedRole = 'kho';
-      _selectedWarehouseId = widget.assignedWarehouseId;
-    }
-    _loadInitialData();
+    _loadData();
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
-    _phoneCtrl.dispose();
-    _passwordCtrl.dispose();
+    _searchController.dispose();
     _service.dispose();
     super.dispose();
   }
 
-  Future<void> _loadInitialData() async {
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
       final results = await Future.wait([
+        _service.getEmployees(),
         _service.getStores(),
         _service.getWarehouses(),
-        _service.getEmployees(),
       ]);
       if (!mounted) return;
-      final stores = results[0] as List<BranchLocation>;
-      final warehouses = results[1] as List<BranchLocation>;
-      final employees = results[2] as List<EmployeeRecord>;
-
-      String? storeId = widget.assignedStoreId;
-      String? whId = widget.assignedWarehouseId;
-
-      // Nếu là Quản lý mà chưa truyền storeId / warehouseId, tự động nạp từ hồ sơ hiện tại
-      if (_isStoreManager && (storeId == null || storeId.isEmpty)) {
-        try {
-          final me = await _service.getStaffProfile();
-          storeId = me.storeId;
-        } catch (_) {}
-      } else if (_isWarehouseManager && (whId == null || whId.isEmpty)) {
-        try {
-          final me = await _service.getStaffProfile();
-          whId = me.warehouseId;
-        } catch (_) {}
-      }
-
       setState(() {
-        _stores = stores;
-        _warehouses = warehouses;
-        _recentEmployees = employees;
-
-        if (_isStoreManager) {
-          _selectedRole = 'sales';
-          _selectedStoreId = storeId ?? (stores.isNotEmpty ? stores.first.id : null);
-        } else if (_isWarehouseManager) {
-          _selectedRole = 'kho';
-          _selectedWarehouseId = whId ?? (warehouses.isNotEmpty ? warehouses.first.id : null);
-        } else {
-          _selectedStoreId ??= stores.isNotEmpty ? stores.first.id : null;
-          _selectedWarehouseId ??=
-              warehouses.isNotEmpty ? warehouses.first.id : null;
-        }
+        _employees = results[0] as List<EmployeeRecord>;
+        _stores = results[1] as List<BranchLocation>;
+        _warehouses = results[2] as List<BranchLocation>;
         _isLoading = false;
       });
     } catch (_) {
@@ -3061,193 +3232,681 @@ class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
     }
   }
 
-  Future<void> _handleCreateAccount() async {
-    final fullName = _nameCtrl.text.trim();
-    final email = _emailCtrl.text.trim();
-    final phone = _phoneCtrl.text.trim();
-    final password = _passwordCtrl.text.trim();
+  Future<void> _toggleActive(EmployeeRecord emp, bool nextActive) async {
+    final updated = await _service.toggleEmployeeActive(
+      employee: emp,
+      isActive: nextActive,
+    );
+    if (!mounted) return;
+    setState(() {
+      final idx = _employees.indexWhere((e) => e.id == emp.id);
+      if (idx >= 0) _employees[idx] = updated;
+    });
+    showSmartMartNotice(
+      context,
+      message: nextActive
+          ? 'Đã kích hoạt tài khoản ${emp.fullName}'
+          : 'Đã tạm khóa tài khoản ${emp.fullName}',
+      icon: nextActive ? Icons.verified_user_rounded : Icons.lock_rounded,
+    );
+  }
 
-    if (fullName.isEmpty || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Vui lòng nhập đầy đủ Họ tên và Email nhân viên.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    if (password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Mật khẩu cần tối thiểu 6 ký tự.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+  Future<void> _showEditEmployeeSheet(EmployeeRecord emp) async {
+    final nameCtrl = TextEditingController(text: emp.fullName);
+    final emailCtrl = TextEditingController(text: emp.email);
+    final phoneCtrl = TextEditingController(text: emp.phone);
+    String selectedRole = emp.role;
+    String? selectedStoreId =
+        emp.storeId ?? (_stores.isNotEmpty ? _stores.first.id : null);
+    String? selectedWarehouseId =
+        emp.warehouseId ??
+        (_warehouses.isNotEmpty ? _warehouses.first.id : null);
+    bool isActive = emp.isActive;
+    bool isSaving = false;
 
-    // Kiểm tra ràng buộc quyền tạo tài khoản
-    if (_isStoreManager && _selectedRole != 'sales') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Quản lý Cửa hàng chỉ được tạo tài khoản Nhân viên Bán hàng (sales).'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    if (_isWarehouseManager && _selectedRole != 'kho') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Quản lý Kho chỉ được tạo tài khoản Nhân viên Kho (kho).'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    final updatedRecord = await showModalBottomSheet<EmployeeRecord>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final isStoreRole =
+              selectedRole == 'store_manager' || selectedRole == 'sales';
+          final isWarehouseRole =
+              selectedRole == 'kho_manager' || selectedRole == 'kho';
 
-    final isStoreRole =
-        _selectedRole == 'store_manager' || _selectedRole == 'sales';
-    final isWarehouseRole =
-        _selectedRole == 'kho_manager' || _selectedRole == 'kho';
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 14,
+              bottom: MediaQuery.viewInsetsOf(context).bottom + 24,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.line,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 22,
+                        backgroundColor: AppColors.blue50,
+                        child: Icon(
+                          Icons.edit_note_rounded,
+                          color: AppColors.blue700,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Chỉnh sửa Tài khoản Nhân viên',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              'Mã nhân viên: ${emp.code}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Họ và tên nhân viên',
+                      prefixIcon: Icon(Icons.person_outline_rounded),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Địa chỉ Email đăng nhập',
+                      prefixIcon: Icon(Icons.email_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Số điện thoại liên hệ',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedRole,
+                    decoration: const InputDecoration(
+                      labelText: 'Chức vụ / Vai trò',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'admin',
+                        child: Text('Quản trị viên (Admin)'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'store_manager',
+                        child: Text('Quản lý Cửa hàng'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'sales',
+                        child: Text('Nhân viên Bán hàng'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'kho_manager',
+                        child: Text('Quản lý Kho'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'kho',
+                        child: Text('Nhân viên Kho'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setSheetState(() => selectedRole = v);
+                      }
+                    },
+                  ),
+                  if (isStoreRole && _stores.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _stores.any((s) => s.id == selectedStoreId)
+                          ? selectedStoreId
+                          : _stores.first.id,
+                      decoration: const InputDecoration(
+                        labelText: 'Nơi làm việc (Cơ sở Cửa hàng)',
+                        prefixIcon: Icon(Icons.storefront_outlined),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _stores
+                          .map(
+                            (s) => DropdownMenuItem(
+                              value: s.id,
+                              child: Text(s.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) =>
+                          setSheetState(() => selectedStoreId = v),
+                    ),
+                  ],
+                  if (isWarehouseRole && _warehouses.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _warehouses.any((w) => w.id == selectedWarehouseId)
+                          ? selectedWarehouseId
+                          : _warehouses.first.id,
+                      decoration: const InputDecoration(
+                        labelText: 'Nơi làm việc (Cơ sở Kho hàng)',
+                        prefixIcon: Icon(Icons.warehouse_outlined),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _warehouses
+                          .map(
+                            (w) => DropdownMenuItem(
+                              value: w.id,
+                              child: Text(w.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) =>
+                          setSheetState(() => selectedWarehouseId = v),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Trạng thái kích hoạt tài khoản',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: Text(
+                      isActive
+                          ? 'Đang hoạt động (Cho phép đăng nhập hệ thống)'
+                          : 'Đang tạm khóa',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    value: isActive,
+                    onChanged: (v) => setSheetState(() => isActive = v),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: isSaving
+                          ? null
+                          : () async {
+                              if (nameCtrl.text.trim().isEmpty ||
+                                  emailCtrl.text.trim().isEmpty) {
+                                return;
+                              }
+                              setSheetState(() => isSaving = true);
+                              final storeObj = _stores
+                                  .where((s) => s.id == selectedStoreId)
+                                  .firstOrNull;
+                              final whObj = _warehouses
+                                  .where((w) => w.id == selectedWarehouseId)
+                                  .firstOrNull;
+                              final saved = await _service.updateEmployee(
+                                id: emp.id,
+                                fullName: nameCtrl.text.trim(),
+                                email: emailCtrl.text.trim(),
+                                phone: phoneCtrl.text.trim(),
+                                role: selectedRole,
+                                storeId: isStoreRole ? selectedStoreId : null,
+                                storeName: isStoreRole
+                                    ? (storeObj?.name ?? '')
+                                    : '',
+                                warehouseId: isWarehouseRole
+                                    ? selectedWarehouseId
+                                    : null,
+                                warehouseName: isWarehouseRole
+                                    ? (whObj?.name ?? '')
+                                    : '',
+                                isActive: isActive,
+                              );
+                              if (sheetCtx.mounted) {
+                                Navigator.of(sheetCtx).pop(saved);
+                              }
+                            },
+                      icon: const Icon(Icons.save_rounded),
+                      label: Text(
+                        isSaving ? 'Đang lưu...' : 'Lưu thông tin nhân viên',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
 
-    final effectiveStoreId = isStoreRole ? _selectedStoreId : null;
-    final effectiveWarehouseId = isWarehouseRole ? _selectedWarehouseId : null;
-
-    final storeObj = _stores.where((s) => s.id == effectiveStoreId).firstOrNull;
-    final whObj = _warehouses.where((w) => w.id == effectiveWarehouseId).firstOrNull;
-
-    setState(() => _isSubmitting = true);
-    try {
-      final created = await _service.createEmployee(
-        fullName: fullName,
-        email: email,
-        phone: phone,
-        password: password,
-        role: _selectedRole,
-        storeId: effectiveStoreId,
-        storeName: storeObj?.name ?? widget.assignedStoreName,
-        warehouseId: effectiveWarehouseId,
-        warehouseName: whObj?.name ?? widget.assignedWarehouseName,
-        isActive: true,
-        creatorRole: widget.currentUserRole,
-      );
-      if (!mounted) return;
-      _nameCtrl.clear();
-      _emailCtrl.clear();
-      _phoneCtrl.clear();
+    if (updatedRecord != null && mounted) {
       setState(() {
-        _isSubmitting = false;
-        _recentEmployees = [created, ..._recentEmployees];
+        final idx = _employees.indexWhere((e) => e.id == emp.id);
+        if (idx >= 0) _employees[idx] = updatedRecord;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Đã tạo tài khoản thành công cho ${created.fullName} (${created.roleLabel})!',
-          ),
-          backgroundColor: Colors.green[700],
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Không thể tạo tài khoản: $e'),
-          backgroundColor: Colors.red[700],
-        ),
+      showSmartMartNotice(
+        context,
+        message: 'Đã cập nhật tài khoản ${updatedRecord.fullName} thành công.',
+        icon: Icons.check_circle_rounded,
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isStoreRole =
-        _selectedRole == 'store_manager' || _selectedRole == 'sales';
-    final isWarehouseRole =
-        _selectedRole == 'kho_manager' || _selectedRole == 'kho';
+    final filtered = _employees.where((e) {
+      if (_roleFilter != 'ALL' && e.role != _roleFilter) return false;
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim().toLowerCase();
+        return e.fullName.toLowerCase().contains(q) ||
+            e.email.toLowerCase().contains(q) ||
+            e.phone.toLowerCase().contains(q) ||
+            e.code.toLowerCase().contains(q) ||
+            e.branchDisplay.toLowerCase().contains(q);
+      }
+      return true;
+    }).toList();
 
-    final bannerTitle = _isStoreManager
-        ? 'Tạo Tài khoản Nhân viên Bán hàng'
-        : _isWarehouseManager
-            ? 'Tạo Tài khoản Nhân viên Kho'
-            : 'Tạo Tài khoản cho Nhân viên';
+    final body = RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 90),
+        children: [
+          // Tìm kiếm
+          TextField(
+            controller: _searchController,
+            onChanged: (v) => setState(() => _searchQuery = v),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search_rounded),
+              hintText: 'Tìm theo tên, email, SĐT, chức vụ hoặc nơi làm việc...',
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppColors.line),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppColors.line),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
 
-    final bannerSubtitle = _isStoreManager
-        ? 'Khởi tạo tài khoản nhân viên bán hàng trực thuộc cửa hàng của bạn'
-        : _isWarehouseManager
-            ? 'Khởi tạo tài khoản nhân viên kho trực thuộc kho quản lý của bạn'
-            : 'Khởi tạo tài khoản đăng nhập mới và phân công cơ sở làm việc';
+          // Lọc theo Chức vụ
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _RoleChip(
+                  label: 'Tất cả (${_employees.length})',
+                  selected: _roleFilter == 'ALL',
+                  onTap: () => setState(() => _roleFilter = 'ALL'),
+                ),
+                const SizedBox(width: 8),
+                _RoleChip(
+                  label: 'Quản lý Cửa hàng',
+                  selected: _roleFilter == 'store_manager',
+                  onTap: () => setState(() => _roleFilter = 'store_manager'),
+                ),
+                const SizedBox(width: 8),
+                _RoleChip(
+                  label: 'NV Bán hàng',
+                  selected: _roleFilter == 'sales',
+                  onTap: () => setState(() => _roleFilter = 'sales'),
+                ),
+                const SizedBox(width: 8),
+                _RoleChip(
+                  label: 'Quản lý Kho',
+                  selected: _roleFilter == 'kho_manager',
+                  onTap: () => setState(() => _roleFilter = 'kho_manager'),
+                ),
+                const SizedBox(width: 8),
+                _RoleChip(
+                  label: 'NV Kho',
+                  selected: _roleFilter == 'kho',
+                  onTap: () => setState(() => _roleFilter = 'kho'),
+                ),
+                const SizedBox(width: 8),
+                _RoleChip(
+                  label: 'Admin',
+                  selected: _roleFilter == 'admin',
+                  onTap: () => setState(() => _roleFilter = 'admin'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
 
-    final currentStoreName = _stores
-            .where((s) => s.id == _selectedStoreId)
-            .firstOrNull
-            ?.name ??
-        widget.assignedStoreName ??
-        'Cửa hàng hiện tại';
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (filtered.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.line),
+              ),
+              child: const Center(
+                child: Text(
+                  'Không tìm thấy tài khoản nhân viên phù hợp.',
+                  style: TextStyle(color: AppColors.muted),
+                ),
+              ),
+            )
+          else
+            ...filtered.map(
+              (emp) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.line),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: AppColors.blue50,
+                            child: Text(
+                              emp.fullName.isNotEmpty
+                                  ? emp.fullName[0].toUpperCase()
+                                  : 'N',
+                              style: const TextStyle(
+                                color: AppColors.blue700,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  emp.fullName,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.ink,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${emp.code} • ${emp.roleLabel}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.blue700,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: emp.isActive,
+                            onChanged: (v) => _toggleActive(emp, v),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 20),
+                      _InfoRowItem(
+                        label: 'Email tài khoản',
+                        value: emp.email.isNotEmpty ? emp.email : 'Chưa cập nhật',
+                        icon: Icons.email_outlined,
+                      ),
+                      _InfoRowItem(
+                        label: 'Số điện thoại',
+                        value: emp.phone.isNotEmpty ? emp.phone : 'Chưa cập nhật',
+                        icon: Icons.phone_outlined,
+                      ),
+                      _InfoRowItem(
+                        label: 'Chức vụ',
+                        value: emp.roleLabel,
+                        icon: Icons.badge_outlined,
+                      ),
+                      _InfoRowItem(
+                        label: 'Nơi làm việc',
+                        value: emp.branchDisplay,
+                        icon: Icons.location_on_outlined,
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showEditEmployeeSheet(emp),
+                          icon: const Icon(Icons.edit_rounded, size: 17),
+                          label: const Text(
+                            'Chỉnh sửa Tên, Email, Chức vụ & Nơi làm việc',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
 
-    final currentWarehouseName = _warehouses
-            .where((w) => w.id == _selectedWarehouseId)
-            .firstOrNull
-            ?.name ??
-        widget.assignedWarehouseName ??
-        'Kho hiện tại';
+    if (widget.embedded) return body;
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(title: const Text('Quản lý Tài khoản Nhân viên')),
+      body: body,
+    );
+  }
+}
 
-    final filteredEmployees = _isStoreManager
-        ? _recentEmployees
-            .where((e) =>
-                (_selectedStoreId != null && e.storeId == _selectedStoreId) ||
-                e.role == 'sales')
-            .toList()
-        : _isWarehouseManager
-            ? _recentEmployees
-                .where((e) =>
-                    (_selectedWarehouseId != null &&
-                        e.warehouseId == _selectedWarehouseId) ||
-                    e.role == 'kho')
-                .toList()
-            : _recentEmployees;
+class _RoleChip extends StatelessWidget {
+  const _RoleChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+    );
+  }
+}
+
+// =============================================================================
+// 3.3. CHỨC NĂNG CON 3: TẠO TÀI KHOẢN CHO NHÂN VIÊN (GIAO DIỆN UI)
+// =============================================================================
+
+class AdminCreateEmployeeScreen extends StatefulWidget {
+  const AdminCreateEmployeeScreen({
+    this.embedded = false,
+    super.key,
+  });
+
+  final bool embedded;
+
+  @override
+  State<AdminCreateEmployeeScreen> createState() =>
+      _AdminCreateEmployeeScreenState();
+}
+
+class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+
+  String _selectedRole = 'sales';
+  String _selectedBranch = 'Cửa hàng SSM4 - Quận 1';
+  bool _obscurePassword = true;
+  bool _activateImmediately = true;
+
+  static const _storeBranches = <String>[
+    'Cửa hàng SSM4 - Quận 1',
+    'Cửa hàng SSM4 - Thủ Đức',
+    'Cửa hàng SSM4 - Quận 7',
+  ];
+
+  static const _warehouseBranches = <String>[
+    'Kho Trung Tâm Thủ Đức',
+    'Kho Tổng Nam Sài Gòn (Q7)',
+  ];
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  List<String> get _currentBranches {
+    if (_selectedRole == 'kho_manager' || _selectedRole == 'kho') {
+      return _warehouseBranches;
+    }
+    return _storeBranches;
+  }
+
+  void _handlePreviewSubmit() {
+    if (_nameCtrl.text.trim().isEmpty || _emailCtrl.text.trim().isEmpty) {
+      showSmartMartNotice(
+        context,
+        message: 'Vui lòng nhập đầy đủ Họ tên và Email nhân viên.',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+    showSmartMartNotice(
+      context,
+      message:
+          'Đã ghi nhận biểu mẫu tạo tài khoản cho ${_nameCtrl.text.trim()} (${EmployeeRecord.labelForRole(_selectedRole)}).',
+      icon: Icons.person_add_alt_1_rounded,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isAdminRole = _selectedRole == 'admin';
+    final branches = _currentBranches;
+    if (!branches.contains(_selectedBranch)) {
+      _selectedBranch = branches.first;
+    }
+
+    final body = ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 90),
       children: [
+        // Thẻ xem trước hồ sơ nhân viên mới
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [AppColors.blue900, AppColors.blue700],
+              colors: [Color(0xFF4C1D95), Color(0xFF7C3AED)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
           ),
           child: Row(
             children: [
               const CircleAvatar(
-                radius: 22,
-                backgroundColor: Colors.white24,
+                radius: 26,
+                backgroundColor: Color(0x33FFFFFF),
                 child: Icon(
                   Icons.person_add_alt_1_rounded,
                   color: Colors.white,
+                  size: 26,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const Text(
+                      'BIỂU MẪU CẤP TÀI KHOẢN MỚI',
+                      style: TextStyle(
+                        color: Color(0xFFDDD6FE),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     Text(
-                      bannerTitle,
+                      _nameCtrl.text.trim().isEmpty
+                          ? 'Họ và tên nhân viên mới'
+                          : _nameCtrl.text.trim(),
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 16,
+                        fontSize: 17,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      bannerSubtitle,
+                      '${EmployeeRecord.labelForRole(_selectedRole)} • ${isAdminRole ? "Trụ sở chính SSM4" : _selectedBranch}',
                       style: const TextStyle(
-                        color: Color(0xFFD6E8FF),
-                        fontSize: 11,
+                        color: Colors.white70,
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -3256,300 +3915,978 @@ class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 14),
-        Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: const BorderSide(color: AppColors.line),
+        const SizedBox(height: 16),
+
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: AppColors.line),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '1. Thông tin Cá nhân & Đăng nhập',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _nameCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Họ và tên nhân viên *',
+                  hintText: 'VD: Nguyễn Văn An',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email tài khoản *',
+                  hintText: 'VD: an.nguyen@ssm4.vn',
+                  prefixIcon: Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Số điện thoại liên hệ',
+                  hintText: 'VD: 0901234567',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _passwordCtrl,
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Mật khẩu khởi tạo *',
+                  hintText: 'Tối thiểu 6 ký tự',
+                  prefixIcon: const Icon(Icons.lock_outline_rounded),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                '2. Phân quyền Chức vụ & Nơi làm việc',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedRole,
+                decoration: const InputDecoration(
+                  labelText: 'Chức vụ trong hệ thống',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'sales',
+                    child: Text('Nhân viên Bán hàng (POS)'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'store_manager',
+                    child: Text('Quản lý Cửa hàng'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'kho',
+                    child: Text('Nhân viên Kho hàng'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'kho_manager',
+                    child: Text('Quản lý Kho hàng'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'admin',
+                    child: Text('Quản trị viên (Admin)'),
+                  ),
+                ],
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() => _selectedRole = v);
+                  }
+                },
+              ),
+              if (!isAdminRole) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedBranch,
+                  decoration: InputDecoration(
+                    labelText:
+                        (_selectedRole == 'kho_manager' ||
+                            _selectedRole == 'kho')
+                        ? 'Phân công về Cơ sở Kho hàng'
+                        : 'Phân công về Cơ sở Cửa hàng',
+                    prefixIcon: const Icon(Icons.location_city_rounded),
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: branches
+                      .map(
+                        (b) => DropdownMenuItem(
+                          value: b,
+                          child: Text(b),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) {
+                      setState(() => _selectedBranch = v);
+                    }
+                  },
+                ),
+              ],
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Kích hoạt tài khoản ngay sau khi tạo',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text(
+                  'Cho phép nhân viên đăng nhập vào ứng dụng ngay lập tức',
+                  style: TextStyle(fontSize: 12),
+                ),
+                value: _activateImmediately,
+                onChanged: (v) => setState(() => _activateImmediately = v),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: _handlePreviewSubmit,
+                  icon: const Icon(Icons.person_add_alt_1_rounded),
+                  label: const Text('Tạo Tài khoản Nhân viên'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (widget.embedded) return body;
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(title: const Text('Tạo Tài khoản Nhân viên')),
+      body: body,
+    );
+  }
+}
+
+// =============================================================================
+// 4. PHÂN HỆ 05: QUẢN LÝ THỐNG KÊ (LƯỢNG HÀNG & LƯỢNG BÁN / XUẤT CỦA KHO & CỬA HÀNG)
+// =============================================================================
+
+class AdminStatisticsScreen extends StatefulWidget {
+  const AdminStatisticsScreen({super.key});
+
+  @override
+  State<AdminStatisticsScreen> createState() => _AdminStatisticsScreenState();
+}
+
+class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
+  final EmployeeManagementService _service = EmployeeManagementService();
+  final TextEditingController _searchController = TextEditingController();
+
+  List<FacilityStatisticsRecord> _records = [];
+  bool _isLoading = true;
+  String _typeFilter = 'ALL'; // 'ALL' | 'STORE' | 'WAREHOUSE'
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatistics();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _service.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadStatistics() async {
+    setState(() => _isLoading = true);
+    try {
+      final list = await _service.getFacilityStatistics();
+      if (!mounted) return;
+      setState(() {
+        _records = list;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _records.where((r) {
+      if (_typeFilter != 'ALL' && r.facilityType != _typeFilter) return false;
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim().toLowerCase();
+        return r.facilityName.toLowerCase().contains(q) ||
+            r.address.toLowerCase().contains(q) ||
+            r.managerName.toLowerCase().contains(q);
+      }
+      return true;
+    }).toList();
+
+    final storeList = _records.where((r) => r.isStore).toList();
+    final whList = _records.where((r) => r.isWarehouse).toList();
+
+    final totalStoreStock =
+        storeList.fold<int>(0, (s, r) => s + r.stockQuantity);
+    final totalWhStock = whList.fold<int>(0, (s, r) => s + r.stockQuantity);
+    final totalSold =
+        storeList.fold<int>(0, (s, r) => s + r.soldOrExportedQuantity);
+    final totalExported =
+        whList.fold<int>(0, (s, r) => s + r.soldOrExportedQuantity);
+
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        title: const Text('Quản lý Thống kê Cơ sở'),
+        actions: [
+          IconButton(
+            onPressed: _loadStatistics,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadStatistics,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 40),
+          children: [
+            // Banner tổng hợp lượng hàng & lượng bán toàn hệ thống
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.blue900, AppColors.blue700],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'THỐNG KÊ LƯỢNG HÀNG & LƯỢNG BÁN TOÀN CHUỖI',
+                    style: TextStyle(
+                      color: Color(0xFFFFD58A),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${storeList.length} Cửa hàng & ${whList.length} Kho trung tâm',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatBannerBox(
+                          label: 'Tồn kệ Cửa hàng',
+                          value: '$totalStoreStock SP',
+                          sub: 'Đã bán: $totalSold SP',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatBannerBox(
+                          label: 'Tồn dự trữ Kho',
+                          value: '$totalWhStock SP',
+                          sub: 'Đã xuất: $totalExported SP',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Tìm kiếm cơ sở
+            TextField(
+              controller: _searchController,
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search_rounded),
+                hintText: 'Tìm cơ sở kho hoặc cửa hàng...',
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.line),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.line),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Bộ lọc Tất cả / Cửa hàng / Kho hàng
+            Row(
+              children: [
+                _PeriodFilterChip(
+                  label: 'Tất cả cơ sở (${_records.length})',
+                  selected: _typeFilter == 'ALL',
+                  onTap: () => setState(() => _typeFilter = 'ALL'),
+                ),
+                const SizedBox(width: 8),
+                _PeriodFilterChip(
+                  label: 'Cửa hàng (${storeList.length})',
+                  selected: _typeFilter == 'STORE',
+                  onTap: () => setState(() => _typeFilter = 'STORE'),
+                ),
+                const SizedBox(width: 8),
+                _PeriodFilterChip(
+                  label: 'Kho hàng (${whList.length})',
+                  selected: _typeFilter == 'WAREHOUSE',
+                  onTap: () => setState(() => _typeFilter = 'WAREHOUSE'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.all(40),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else
+              ...filtered.map(
+                (rec) => Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _FacilityStatisticsCard(record: rec),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatBannerBox extends StatelessWidget {
+  const _StatBannerBox({
+    required this.label,
+    required this.value,
+    required this.sub,
+  });
+
+  final String label;
+  final String value;
+  final String sub;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            sub,
+            style: const TextStyle(
+              color: Color(0xFF6EE7B7),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FacilityStatisticsCard extends StatelessWidget {
+  const _FacilityStatisticsCard({required this.record});
+
+  final FacilityStatisticsRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final isStore = record.isStore;
+    final accent = isStore ? const Color(0xFFEA580C) : const Color(0xFF059669);
+    final tint = isStore ? const Color(0xFFFFF7ED) : const Color(0xFFECFDF5);
+    final capPct = (record.capacityRatio * 100).toStringAsFixed(0);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: tint,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  isStore ? Icons.storefront_rounded : Icons.warehouse_rounded,
+                  color: accent,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: tint,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            isStore ? 'CƠ SỞ CỬA HÀNG' : 'CƠ SỞ KHO HÀNG',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              color: accent,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '+${record.growthPercent.toStringAsFixed(1)}%',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF059669),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      record.facilityName,
+                      style: const TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    Text(
+                      'QL: ${record.managerName} • ${record.staffCount} nhân viên',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // 4 chỉ số Lượng hàng & Lượng bán/xuất
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MiniStatCol(
+                        label: isStore
+                            ? 'Lượng hàng tồn kệ'
+                            : 'Lượng hàng tồn kho',
+                        value: '${record.stockQuantity} SP',
+                        sub:
+                            '${record.skuCount} mã SKU • ${record.lowStockCount} sắp hết',
+                        color: AppColors.blue900,
+                      ),
+                    ),
+                    Container(width: 1, height: 36, color: AppColors.line),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _MiniStatCol(
+                        label: isStore
+                            ? 'Lượng bán ra (tháng)'
+                            : 'Lượng xuất điều phối',
+                        value: '${record.soldOrExportedQuantity} SP',
+                        sub: isStore
+                            ? '${record.orderOrExportCount} đơn hàng'
+                            : '${record.orderOrExportCount} phiếu nhập/xuất',
+                        color: accent,
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MiniStatCol(
+                        label: 'Lượng hàng nhập vào',
+                        value: '${record.inboundQuantity} SP',
+                        sub: 'Tiếp nhận trong kỳ',
+                        color: const Color(0xFF059669),
+                      ),
+                    ),
+                    Container(width: 1, height: 36, color: AppColors.line),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _MiniStatCol(
+                        label: isStore
+                            ? 'Doanh thu bán hàng'
+                            : 'Giá trị hàng tồn kho',
+                        value: formatCurrency(record.revenueOrStockValue),
+                        sub: isStore ? 'Tổng doanh thu kỳ' : 'Giá trị ước tính',
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Tỷ lệ lấp đầy sức chứa (${record.stockQuantity}/${record.maxCapacity} SP)',
+                style: const TextStyle(fontSize: 11, color: AppColors.muted),
+              ),
+              Text(
+                '$capPct%',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: record.capacityRatio,
+              minHeight: 6,
+              backgroundColor: tint,
+              valueColor: AlwaysStoppedAnimation<Color>(accent),
+            ),
+          ),
+          if (record.topProducts.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Mặt hàng chủ lực: ${record.topProducts.take(3).join(" • ")}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.muted,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStatCol extends StatelessWidget {
+  const _MiniStatCol({
+    required this.label,
+    required this.value,
+    required this.sub,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final String sub;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppColors.muted),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+        Text(
+          sub,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 10.5, color: AppColors.muted),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// 5. TAB "CÁ NHÂN" TRÊN THANH ĐIỀU HƯỚNG DƯỚI CÙNG CỦA ADMIN
+// =============================================================================
+
+class AdminPersonalProfileScreen extends StatefulWidget {
+  const AdminPersonalProfileScreen({
+    required this.userName,
+    required this.userEmail,
+    required this.onLogout,
+    super.key,
+  });
+
+  final String userName;
+  final String userEmail;
+  final VoidCallback onLogout;
+
+  @override
+  State<AdminPersonalProfileScreen> createState() =>
+      _AdminPersonalProfileScreenState();
+}
+
+class _AdminPersonalProfileScreenState
+    extends State<AdminPersonalProfileScreen> {
+  final EmployeeManagementService _service = EmployeeManagementService();
+  EmployeeRecord? _profile;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    _service.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() => _loading = true);
+    try {
+      final p = await _service.getStaffProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = p;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _showEditProfileDialog() async {
+    final nameCtrl = TextEditingController(
+      text: _profile?.fullName ?? widget.userName,
+    );
+    final phoneCtrl = TextEditingController(
+      text: _profile?.phone ?? '0901112222',
+    );
+    final emailCtrl = TextEditingController(
+      text: _profile?.email.isNotEmpty == true
+          ? _profile!.email
+          : widget.userEmail,
+    );
+
+    final saved = await showDialog<EmployeeRecord>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cập nhật Hồ sơ Cá nhân Admin'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'Họ và tên'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: emailCtrl,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: phoneCtrl,
+              decoration: const InputDecoration(labelText: 'Số điện thoại'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final updated = await _service.updateStaffProfile(
+                fullName: nameCtrl.text.trim(),
+                phone: phoneCtrl.text.trim(),
+                email: emailCtrl.text.trim(),
+                notifyShift: true,
+                notifyEmail: true,
+              );
+              if (ctx.mounted) Navigator.of(ctx).pop(updated);
+            },
+            child: const Text('Lưu thay đổi'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved != null && mounted) {
+      setState(() => _profile = saved);
+      showSmartMartNotice(
+        context,
+        message: 'Đã cập nhật thông tin cá nhân Admin.',
+        icon: Icons.check_circle_rounded,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = _profile?.fullName.isNotEmpty == true
+        ? _profile!.fullName
+        : (widget.userName.isNotEmpty ? widget.userName : 'Quản trị viên SSM4');
+    final displayEmail = _profile?.email.isNotEmpty == true
+        ? _profile!.email
+        : widget.userEmail;
+    final displayPhone = _profile?.phone.isNotEmpty == true
+        ? _profile!.phone
+        : '0901 112 222';
+    final displayCode = _profile?.code ?? 'NV-ADM-0001';
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppColors.blue900, AppColors.blue700],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            children: [
+              const CircleAvatar(
+                radius: 32,
+                backgroundColor: Color(0x33FFFFFF),
+                child: Icon(
+                  Icons.admin_panel_settings_rounded,
+                  color: Colors.white,
+                  size: 34,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'TÀI KHOẢN CÁ NHÂN ADMIN',
+                      style: TextStyle(
+                        color: Color(0xFFFFD58A),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      displayEmail,
+                      style: const TextStyle(
+                        color: Color(0xFFDCEBFA),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Thông tin tài khoản nhân viên mới',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Họ và tên nhân viên *',
-                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  'Thông tin Hồ sơ Quản trị viên',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
                   ),
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email đăng nhập *',
-                    prefixIcon: Icon(Icons.mail_outline_rounded),
-                  ),
+                const Divider(height: 22),
+                _InfoRowItem(
+                  label: 'Mã định danh',
+                  value: displayCode,
+                  icon: Icons.qr_code_rounded,
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Số điện thoại *',
-                    prefixIcon: Icon(Icons.phone_android_rounded),
-                  ),
+                _InfoRowItem(
+                  label: 'Họ và tên',
+                  value: displayName,
+                  icon: Icons.person_outline_rounded,
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _passwordCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Mật khẩu khởi tạo *',
-                    prefixIcon: Icon(Icons.lock_outline_rounded),
-                  ),
+                _InfoRowItem(
+                  label: 'Email đăng nhập',
+                  value: displayEmail,
+                  icon: Icons.email_outlined,
                 ),
-                const SizedBox(height: 12),
-                InputDecorator(
-                  decoration: InputDecoration(
-                    labelText: 'Chức vụ (Role) *',
-                    prefixIcon: const Icon(Icons.badge_outlined),
-                    helperText: _isStoreManager
-                        ? 'Quản lý Cửa hàng chỉ được tạo quyền Nhân viên Bán hàng'
-                        : _isWarehouseManager
-                            ? 'Quản lý Kho chỉ được tạo quyền Nhân viên Kho'
-                            : null,
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedRole,
-                      isDense: true,
-                      isExpanded: true,
-                      items: _isStoreManager
-                          ? const [
-                              DropdownMenuItem(
-                                value: 'sales',
-                                child: Text('Nhân viên Bán hàng (sales)'),
-                              ),
-                            ]
-                          : _isWarehouseManager
-                              ? const [
-                                  DropdownMenuItem(
-                                    value: 'kho',
-                                    child: Text('Nhân viên Kho (kho)'),
-                                  ),
-                                ]
-                              : const [
-                                  DropdownMenuItem(
-                                    value: 'sales',
-                                    child: Text('Nhân viên Bán hàng (sales)'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'store_manager',
-                                    child: Text('Quản lý Cửa hàng (store_manager)'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'kho',
-                                    child: Text('Nhân viên Kho (kho)'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'kho_manager',
-                                    child: Text('Quản lý Kho (kho_manager)'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'admin',
-                                    child: Text('Quản trị viên (admin)'),
-                                  ),
-                                ],
-                      onChanged: (_isStoreManager || _isWarehouseManager)
-                          ? null
-                          : (v) {
-                              if (v != null) setState(() => _selectedRole = v);
-                            },
-                    ),
-                  ),
+                _InfoRowItem(
+                  label: 'Số điện thoại',
+                  value: displayPhone,
+                  icon: Icons.phone_outlined,
                 ),
-                const SizedBox(height: 12),
-                if (isStoreRole && !_isWarehouseManager)
-                  InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: _isStoreManager
-                          ? 'Cửa hàng phân công (Cố định theo quyền Quản lý) *'
-                          : 'Phân công Cửa hàng làm việc *',
-                      prefixIcon: const Icon(Icons.storefront_rounded),
-                      helperText: _isStoreManager
-                          ? 'Tài khoản nhân viên được gán trực tiếp vào cửa hàng của bạn'
-                          : null,
-                    ),
-                    child: _isStoreManager
-                        ? Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.lock_outline_rounded,
-                                    size: 16, color: AppColors.muted),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    currentStoreName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.ink,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : (_stores.isNotEmpty
-                            ? DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  value: _stores.any(
-                                          (s) => s.id == _selectedStoreId)
-                                      ? _selectedStoreId
-                                      : _stores.first.id,
-                                  isDense: true,
-                                  isExpanded: true,
-                                  items: _stores
-                                      .map(
-                                        (s) => DropdownMenuItem(
-                                          value: s.id,
-                                          child: Text(s.name),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: (v) =>
-                                      setState(() => _selectedStoreId = v),
-                                ),
-                              )
-                            : const Text('Đang tải danh sách cửa hàng...')),
-                  ),
-                if (isWarehouseRole && !_isStoreManager)
-                  InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: _isWarehouseManager
-                          ? 'Kho phân công (Cố định theo quyền Quản lý) *'
-                          : 'Phân công Kho làm việc *',
-                      prefixIcon: const Icon(Icons.warehouse_rounded),
-                      helperText: _isWarehouseManager
-                          ? 'Tài khoản nhân viên được gán trực tiếp vào kho của bạn'
-                          : null,
-                    ),
-                    child: _isWarehouseManager
-                        ? Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.lock_outline_rounded,
-                                    size: 16, color: AppColors.muted),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    currentWarehouseName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.ink,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : (_warehouses.isNotEmpty
-                            ? DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  value: _warehouses.any(
-                                          (w) => w.id == _selectedWarehouseId)
-                                      ? _selectedWarehouseId
-                                      : _warehouses.first.id,
-                                  isDense: true,
-                                  isExpanded: true,
-                                  items: _warehouses
-                                      .map(
-                                        (w) => DropdownMenuItem(
-                                          value: w.id,
-                                          child: Text(w.name),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: (v) =>
-                                      setState(() => _selectedWarehouseId = v),
-                                ),
-                              )
-                            : const Text('Đang tải danh sách kho...')),
-                  ),
-                const SizedBox(height: 16),
+                _InfoRowItem(
+                  label: 'Chức vụ',
+                  value: 'Quản trị viên Hệ thống (Admin)',
+                  icon: Icons.verified_user_outlined,
+                ),
+                _InfoRowItem(
+                  label: 'Phạm vi quản lý',
+                  value: 'Toàn chuỗi Kho & Cửa hàng SSM4',
+                  icon: Icons.domain_rounded,
+                ),
+                const SizedBox(height: 14),
                 SizedBox(
-                  height: 48,
-                  child: FilledButton.icon(
-                    onPressed: _isSubmitting ? null : _handleCreateAccount,
-                    icon: const Icon(Icons.person_add_rounded),
-                    label: Text(
-                      _isSubmitting
-                          ? 'ĐANG TẠO TÀI KHOẢN...'
-                          : _isStoreManager
-                              ? 'TẠO TÀI KHOẢN NV BÁN HÀNG'
-                              : _isWarehouseManager
-                                  ? 'TẠO TÀI KHOẢN NV KHO'
-                                  : 'TẠO TÀI KHOẢN NHÂN VIÊN',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _showEditProfileDialog,
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    label: const Text('Chỉnh sửa thông tin cá nhân'),
                   ),
                 ),
               ],
             ),
           ),
+        const SizedBox(height: 20),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.red[700],
+            side: BorderSide(color: Colors.red.shade200),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+          onPressed: widget.onLogout,
+          icon: const Icon(Icons.logout_rounded),
+          label: const Text('Đăng xuất tài khoản Admin'),
         ),
-        const SizedBox(height: 18),
-        Text(
-          _isStoreManager
-              ? 'Nhân viên bán hàng tại cửa hàng'
-              : _isWarehouseManager
-                  ? 'Nhân viên kho tại cơ sở'
-                  : 'Tài khoản nhân viên trong hệ thống',
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 8),
-        if (_isLoading)
-          const Center(child: CircularProgressIndicator())
-        else if (filteredEmployees.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: Text(
-                'Chưa có nhân viên nào trong danh sách.',
-                style: TextStyle(color: AppColors.muted, fontSize: 13),
-              ),
-            ),
-          )
-        else
-          ...filteredEmployees.take(8).map(
-                (emp) => Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: AppColors.blue50,
-                      child: Text(
-                        emp.fullName.isNotEmpty
-                            ? emp.fullName[0].toUpperCase()
-                            : 'N',
-                        style: const TextStyle(
-                          color: AppColors.blue800,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      emp.fullName,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    subtitle: Text(
-                      '${emp.roleLabel} • ${emp.branchDisplay}\n${emp.email}',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    isThreeLine: true,
-                  ),
-                ),
-              ),
       ],
     );
   }
