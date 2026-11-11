@@ -94,6 +94,15 @@ class RestockRequestItem {
     return 'Chưa cập nhật';
   }
 
+  /// Số lượng mục tiêu cần kiểm tra/xuất kho.
+  /// Ưu tiên [approvedQuantity] nếu > 0; ngược lại dùng [requestedQuantity].
+  int get effectiveQuantity {
+    if (approvedQuantity != null && approvedQuantity! > 0) {
+      return approvedQuantity!;
+    }
+    return requestedQuantity > 0 ? requestedQuantity : 0;
+  }
+
   factory RestockRequestItem.fromJson(Map<String, dynamic> json) {
     final pMap = json['product'] is Map ? json['product'] as Map : null;
     return RestockRequestItem(
@@ -130,15 +139,16 @@ class RestockRequestItem {
             pMap?['warehouseStock'] ??
             pMap?['stock'],
       ),
-      packageSize: (json['packageSize'] ??
-              json['package_size'] ??
-              json['unit'] ??
-              json['productUnit'] ??
-              json['product_unit'] ??
-              pMap?['packageSize'] ??
-              pMap?['package_size'] ??
-              pMap?['unit'])
-          ?.toString(),
+      packageSize:
+          (json['packageSize'] ??
+                  json['package_size'] ??
+                  json['unit'] ??
+                  json['productUnit'] ??
+                  json['product_unit'] ??
+                  pMap?['packageSize'] ??
+                  pMap?['package_size'] ??
+                  pMap?['unit'])
+              ?.toString(),
     );
   }
 
@@ -286,73 +296,80 @@ class RestockRequest {
         ? (DateTime.tryParse(createdStr.toString()) ?? DateTime.now())
         : DateTime.now();
 
-    final stockExportMap =
-        json['stockExport'] is Map ? json['stockExport'] as Map : null;
+    final stockExportMap = json['stockExport'] is Map
+        ? json['stockExport'] as Map
+        : null;
 
     final createdByRaw = (json['createdBy'] ?? json['created_by'])?.toString();
-    final createdByNameRaw = (json['createdByName'] ??
-            json['created_by_name'] ??
-            json['createdByFullName'] ??
-            json['created_by_full_name'] ??
-            json['creatorName'] ??
-            json['creator']?['fullName'] ??
-            json['creator']?['full_name'] ??
-            json['creator']?['name'] ??
-            json['created_by_employee']?['full_name'] ??
-            json['created_by_employee']?['name'])
-        ?.toString();
+    final createdByNameRaw =
+        (json['createdByName'] ??
+                json['created_by_name'] ??
+                json['createdByFullName'] ??
+                json['created_by_full_name'] ??
+                json['creatorName'] ??
+                json['creator']?['fullName'] ??
+                json['creator']?['full_name'] ??
+                json['creator']?['name'] ??
+                json['created_by_employee']?['full_name'] ??
+                json['created_by_employee']?['name'])
+            ?.toString();
 
-    final approvedByRaw =
-        (json['approvedBy'] ?? json['approved_by'])?.toString();
-    final approvedByNameRaw = (json['approvedByName'] ??
-            json['approved_by_name'] ??
-            json['approvedByFullName'] ??
-            json['approved_by_full_name'] ??
-            json['approverName'] ??
-            json['approver']?['fullName'] ??
-            json['approver']?['full_name'] ??
-            json['approver']?['name'] ??
-            json['approved_by_employee']?['full_name'] ??
-            json['approved_by_employee']?['name'])
+    final approvedByRaw = (json['approvedBy'] ?? json['approved_by'])
         ?.toString();
+    final approvedByNameRaw =
+        (json['approvedByName'] ??
+                json['approved_by_name'] ??
+                json['approvedByFullName'] ??
+                json['approved_by_full_name'] ??
+                json['approverName'] ??
+                json['approver']?['fullName'] ??
+                json['approver']?['full_name'] ??
+                json['approver']?['name'] ??
+                json['approved_by_employee']?['full_name'] ??
+                json['approved_by_employee']?['name'])
+            ?.toString();
 
-    final exportedByRaw = (json['exportedBy'] ??
-            json['exported_by'] ??
-            stockExportMap?['createdBy'] ??
-            stockExportMap?['created_by'])
-        ?.toString();
-    final exportedByNameRaw = (json['exportedByName'] ??
-            json['exported_by_name'] ??
-            json['exportedByFullName'] ??
-            json['exported_by_full_name'] ??
-            json['exporterName'] ??
-            stockExportMap?['createdByName'] ??
-            stockExportMap?['created_by_name'] ??
-            stockExportMap?['createdByFullName'] ??
-            stockExportMap?['created_by_full_name'] ??
-            stockExportMap?['creator']?['fullName'] ??
-            stockExportMap?['creator']?['full_name'] ??
-            stockExportMap?['creator']?['name'])
-        ?.toString();
+    final exportedByRaw =
+        (json['exportedBy'] ??
+                json['exported_by'] ??
+                stockExportMap?['createdBy'] ??
+                stockExportMap?['created_by'])
+            ?.toString();
+    final exportedByNameRaw =
+        (json['exportedByName'] ??
+                json['exported_by_name'] ??
+                json['exportedByFullName'] ??
+                json['exported_by_full_name'] ??
+                json['exporterName'] ??
+                stockExportMap?['createdByName'] ??
+                stockExportMap?['created_by_name'] ??
+                stockExportMap?['createdByFullName'] ??
+                stockExportMap?['created_by_full_name'] ??
+                stockExportMap?['creator']?['fullName'] ??
+                stockExportMap?['creator']?['full_name'] ??
+                stockExportMap?['creator']?['name'])
+            ?.toString();
 
-    final receivedByRaw = (json['receivedBy'] ??
-            json['received_by'] ??
-            stockExportMap?['receivedBy'] ??
-            stockExportMap?['received_by'])
-        ?.toString();
-    final receivedByNameRaw = (json['receivedByName'] ??
-            json['received_by_name'] ??
-            json['receivedByFullName'] ??
-            json['received_by_full_name'] ??
-            json['receiverName'] ??
-            stockExportMap?['receivedByName'] ??
-            stockExportMap?['received_by_name'] ??
-            stockExportMap?['receivedByFullName'] ??
-            stockExportMap?['received_by_full_name'] ??
-            stockExportMap?['receiver']?['fullName'] ??
-            stockExportMap?['receiver']?['full_name'] ??
-            stockExportMap?['receiver']?['name'])
-        ?.toString();
+    final receivedByRaw =
+        (json['receivedBy'] ??
+                json['received_by'] ??
+                stockExportMap?['receivedBy'] ??
+                stockExportMap?['received_by'])
+            ?.toString();
+    final receivedByNameRaw =
+        (json['receivedByName'] ??
+                json['received_by_name'] ??
+                json['receivedByFullName'] ??
+                json['received_by_full_name'] ??
+                json['receiverName'] ??
+                stockExportMap?['receivedByName'] ??
+                stockExportMap?['received_by_name'] ??
+                stockExportMap?['receivedByFullName'] ??
+                stockExportMap?['received_by_full_name'] ??
+                stockExportMap?['receiver']?['fullName'] ??
+                stockExportMap?['receiver']?['full_name'] ??
+                stockExportMap?['receiver']?['name'])
+            ?.toString();
 
     return RestockRequest(
       id: (json['id'] ?? json['requestId'] ?? '').toString(),

@@ -1089,7 +1089,7 @@ class RestockProduct3ColumnTable extends StatelessWidget {
                 const Divider(height: 1, color: Color(0xFFF1F5F9)),
             itemBuilder: (context, index) {
               final item = items[index];
-              final targetQty = item.approvedQuantity ?? item.requestedQuantity;
+              final targetQty = item.effectiveQuantity;
               final scanned = scannedCounts[item.productId] ?? 0;
               final remaining = targetQty - scanned < 0
                   ? 0
@@ -2189,8 +2189,7 @@ class _WarehouseRestockRequestDetailScreenState
 
     final approvedQtyMap = <String, int>{};
     for (final item in req.items) {
-      approvedQtyMap[item.productId] =
-          item.approvedQuantity ?? item.requestedQuantity;
+      approvedQtyMap[item.productId] = item.effectiveQuantity;
     }
 
     final confirm = await showModalBottomSheet<bool>(
@@ -2496,7 +2495,7 @@ class _WarehouseRestockRequestDetailScreenState
     final shortageItems = <RestockRequestItem>[];
 
     for (final item in req.items) {
-      final approved = item.approvedQuantity ?? item.requestedQuantity;
+      final approved = item.effectiveQuantity;
       if (item.warehouseStock != null && item.warehouseStock! < approved) {
         shortageItems.add(item);
       }
@@ -2578,7 +2577,7 @@ class _WarehouseRestockRequestDetailScreenState
                             Text(
                               'Các mặt hàng sau có tồn kho ít hơn số lượng cần xuất:\n'
                               '${shortageItems.map((i) {
-                                final qty = i.approvedQuantity ?? i.requestedQuantity;
+                                final qty = i.effectiveQuantity;
                                 return '• ${i.productName ?? i.productId}: Cần xuất $qty SP | Tồn thực tế: ${i.warehouseStock} SP (Thiếu ${qty - i.warehouseStock!} SP)';
                               }).join('\n')}',
                               style: TextStyle(
@@ -2634,8 +2633,7 @@ class _WarehouseRestockRequestDetailScreenState
                         separatorBuilder: (_, _) => const Divider(height: 1),
                         itemBuilder: (context, idx) {
                           final item = req.items[idx];
-                          final qty =
-                              item.approvedQuantity ?? item.requestedQuantity;
+                          final qty = item.effectiveQuantity;
                           final stock = item.warehouseStock;
                           final isShort = stock != null && stock < qty;
 
@@ -3403,8 +3401,7 @@ class _WarehouseStockExportScanScreenState
 
   int get _totalTargetCount {
     return widget.request.items.fold<int>(0, (sum, item) {
-      final target = item.approvedQuantity ?? item.requestedQuantity;
-      return sum + target;
+      return sum + item.effectiveQuantity;
     });
   }
 
@@ -3413,8 +3410,9 @@ class _WarehouseStockExportScanScreenState
   }
 
   bool get _isAllScanned {
+    if (widget.request.items.isEmpty) return false;
     for (final item in widget.request.items) {
-      final target = item.approvedQuantity ?? item.requestedQuantity;
+      final target = item.effectiveQuantity;
       if (target > 0) {
         final scanned = _scannedCounts[item.productId] ?? 0;
         if (scanned < target) return false;
@@ -3422,6 +3420,9 @@ class _WarehouseStockExportScanScreenState
     }
     return true;
   }
+
+  DateTime? _lastScanTime;
+  String? _lastScannedCode;
 
   void _onDetectBarcode(BarcodeCapture capture) {
     if (_isProcessingScan) return;
@@ -3435,8 +3436,17 @@ class _WarehouseStockExportScanScreenState
   }
 
   Future<void> _handleScannedBarcode(String code) async {
+    final now = DateTime.now();
     if (_isProcessingScan) return;
+    if (_lastScannedCode == code &&
+        _lastScanTime != null &&
+        now.difference(_lastScanTime!).inMilliseconds < 1200) {
+      return;
+    }
+
     _isProcessingScan = true;
+    _lastScanTime = now;
+    _lastScannedCode = code;
 
     RestockRequestItem? matchedItem;
     for (final item in widget.request.items) {
@@ -3459,11 +3469,10 @@ class _WarehouseStockExportScanScreenState
       return;
     }
 
-    final target =
-        matchedItem.approvedQuantity ?? matchedItem.requestedQuantity;
+    final target = matchedItem.effectiveQuantity;
     if (target == 0) {
       _showFeedback(
-        '⚠️ Sản phẩm ${matchedItem.productName ?? matchedItem.productId} có số lượng duyệt bằng 0, không được xuất.',
+        '⚠️ Sản phẩm ${matchedItem.productName ?? matchedItem.productId} có số lượng cần xuất bằng 0.',
         isError: true,
       );
       _unlockScanAfterDelay();
@@ -3496,7 +3505,7 @@ class _WarehouseStockExportScanScreenState
   }
 
   void _unlockScanAfterDelay() {
-    Future.delayed(const Duration(milliseconds: 1300), () {
+    Future.delayed(const Duration(milliseconds: 1000), () {
       if (mounted) {
         _isProcessingScan = false;
       }
@@ -3570,13 +3579,33 @@ class _WarehouseStockExportScanScreenState
 
     final scannedPayload = widget.request.items.map((item) {
       final qty = _scannedCounts[item.productId] ?? 0;
+      final barcode =
+          (item.productBarcode != null &&
+              item.productBarcode!.trim().isNotEmpty)
+          ? item.productBarcode!.trim()
+          : item.productId;
       return {
         'productId': item.productId,
-        'barcode': item.productBarcode ?? '',
+        'barcode': barcode,
         'scannedQuantity': qty,
         'quantity': qty,
+        'requestedQuantity': item.effectiveQuantity,
+        'approvedQuantity': item.effectiveQuantity,
       };
     }).toList();
+
+    // Safe logging (không chứa JWT)
+    final timestamp = DateTime.now().toIso8601String();
+    debugPrint(
+      '[STOCK EXPORT SUBMIT] [$timestamp] Request ID: ${widget.request.id}',
+    );
+    debugPrint('[STOCK EXPORT SKUs COUNT] ${widget.request.items.length}');
+    for (final item in widget.request.items) {
+      final scanned = _scannedCounts[item.productId] ?? 0;
+      debugPrint(
+        '[EXPORT SKU] ${item.productId} (${item.productName}) -> Target Qty: ${item.effectiveQuantity}, Scanned Qty: $scanned',
+      );
+    }
 
     try {
       await _restockService.exportRequest(
@@ -3602,17 +3631,32 @@ class _WarehouseStockExportScanScreenState
       setState(() => _isSubmitting = false);
       final formattedError = formatRestockApiError(e);
 
+      debugPrint(
+        '[EXPORT ERROR] Request ID: ${widget.request.id} -> $formattedError',
+      );
+
       if (e is ApiException && e.statusCode == 409) {
         showDialog<void>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             icon: const Icon(Icons.error_outline, color: Colors.red, size: 44),
             title: const Text('Xuất kho thất bại (409)'),
-            content: Text(formattedError),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(formattedError),
+                const SizedBox(height: 12),
+                const Text(
+                  'Vui lòng tiếp tục quét đủ số lượng thực tế cần xuất cho từng mặt hàng bên dưới.',
+                  style: TextStyle(fontSize: 11, color: AppColors.muted),
+                ),
+              ],
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Đóng'),
+                child: const Text('Tiếp tục kiểm tra'),
               ),
             ],
           ),
