@@ -313,16 +313,20 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
                   // ── DANH SÁCH DASHBOARD CHI TIẾT TỪNG CỬA HÀNG ───────────
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Thông tin vận hành từng Cửa hàng (${filteredStores.length})',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.ink,
+                      Expanded(
+                        child: Text(
+                          'Thông tin vận hành từng Cửa hàng (${filteredStores.length})',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.ink,
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 8),
                       TextButton.icon(
                         onPressed: () => widget.onSelectBottomTab(2),
                         icon: const Icon(Icons.storefront_rounded, size: 16),
@@ -1434,9 +1438,11 @@ class AdminFunctionsMenuScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-      children: [
+    return SafeArea(
+      bottom: false,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+        children: [
         // Banner giới thiệu 5 phân hệ
         Container(
           padding: const EdgeInsets.all(20),
@@ -1615,8 +1621,9 @@ class AdminFunctionsMenuScreen extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
+    ),
+  );
+}
 }
 
 class _BigFeatureModuleCard extends StatelessWidget {
@@ -2009,11 +2016,13 @@ class _AdminStoresTabScreenState extends State<AdminStoresTabScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-        children: [
+    return SafeArea(
+      bottom: false,
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+          children: [
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -2165,8 +2174,9 @@ class _AdminStoresTabScreenState extends State<AdminStoresTabScreen> {
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _SubFeatureActionTile extends StatelessWidget {
@@ -2267,6 +2277,8 @@ class AdminEmployeeManagementHubScreen extends StatefulWidget {
 class _AdminEmployeeManagementHubScreenState
     extends State<AdminEmployeeManagementHubScreen> {
   late int _subTab;
+  final GlobalKey<AdminStaffProfileManagementScreenState> _profileKey =
+      GlobalKey<AdminStaffProfileManagementScreenState>();
 
   @override
   void initState() {
@@ -2278,8 +2290,19 @@ class _AdminEmployeeManagementHubScreenState
   Widget build(BuildContext context) {
     final pages = <Widget>[
       const AdminAttendanceScreen(embedded: true),
-      const AdminStaffProfileManagementScreen(embedded: true),
-      const AdminCreateEmployeeScreen(embedded: true),
+      AdminStaffProfileManagementScreen(
+        key: _profileKey,
+        embedded: true,
+      ),
+      AdminCreateEmployeeScreen(
+        embedded: true,
+        onCreated: () {
+          _profileKey.currentState?.reload();
+          if (mounted) {
+            setState(() => _subTab = 1);
+          }
+        },
+      ),
     ];
 
     return Scaffold(
@@ -3176,17 +3199,25 @@ class _AttendanceCountBadge extends StatelessWidget {
 class AdminStaffProfileManagementScreen extends StatefulWidget {
   const AdminStaffProfileManagementScreen({
     this.embedded = false,
+    this.storeIdFilter,
+    this.warehouseIdFilter,
+    this.fixedFacilityTitle,
+    this.lockFilter = false,
     super.key,
   });
 
   final bool embedded;
+  final String? storeIdFilter;
+  final String? warehouseIdFilter;
+  final String? fixedFacilityTitle;
+  final bool lockFilter;
 
   @override
   State<AdminStaffProfileManagementScreen> createState() =>
-      _AdminStaffProfileManagementScreenState();
+      AdminStaffProfileManagementScreenState();
 }
 
-class _AdminStaffProfileManagementScreenState
+class AdminStaffProfileManagementScreenState
     extends State<AdminStaffProfileManagementScreen> {
   final EmployeeManagementService _service = EmployeeManagementService();
   final TextEditingController _searchController = TextEditingController();
@@ -3197,6 +3228,10 @@ class _AdminStaffProfileManagementScreenState
   bool _isLoading = true;
   String _roleFilter = 'ALL';
   String _searchQuery = '';
+
+  void reload() {
+    _loadData();
+  }
 
   @override
   void initState() {
@@ -3215,7 +3250,10 @@ class _AdminStaffProfileManagementScreenState
     setState(() => _isLoading = true);
     try {
       final results = await Future.wait([
-        _service.getEmployees(),
+        _service.getEmployees(
+          storeId: widget.storeIdFilter,
+          warehouseId: widget.warehouseIdFilter,
+        ),
         _service.getStores(),
         _service.getWarehouses(),
       ]);
@@ -3272,7 +3310,7 @@ class _AdminStaffProfileManagementScreenState
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (sheetCtx) => StatefulBuilder(
-        builder: (context, setSheetState) {
+        builder: (_, setSheetState) {
           final isStoreRole =
               selectedRole == 'store_manager' || selectedRole == 'sales';
           final isWarehouseRole =
@@ -3511,6 +3549,76 @@ class _AdminStaffProfileManagementScreenState
                       ),
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                        side: BorderSide(color: Colors.red.shade700),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onPressed: isSaving
+                          ? null
+                          : () async {
+                              final confirm = await showDialog<bool>(
+                                context: sheetCtx,
+                                builder: (dlgCtx) => AlertDialog(
+                                  title: const Text('Xác nhận xóa tài khoản'),
+                                  content: Text(
+                                    'Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản "${emp.fullName}" (${emp.email}) khỏi cơ sở dữ liệu SQL?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(dlgCtx).pop(false),
+                                      child: const Text('Hủy'),
+                                    ),
+                                    FilledButton(
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: Colors.red.shade700,
+                                      ),
+                                      onPressed: () =>
+                                          Navigator.of(dlgCtx).pop(true),
+                                      child: const Text('Xóa vĩnh viễn'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                setSheetState(() => isSaving = true);
+                                try {
+                                  await _service.deleteEmployee(emp.id);
+                                  if (sheetCtx.mounted) {
+                                    Navigator.of(sheetCtx).pop();
+                                  }
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _employees
+                                        .removeWhere((e) => e.id == emp.id);
+                                  });
+                                  showSmartMartNotice(
+                                    context,
+                                    message:
+                                        'Đã xóa tài khoản ${emp.fullName} thành công khỏi SQL!',
+                                    icon: Icons.delete_outline_rounded,
+                                  );
+                                } catch (e) {
+                                  setSheetState(() => isSaving = false);
+                                  if (sheetCtx.mounted) {
+                                    showSmartMartNotice(
+                                      sheetCtx,
+                                      message: 'Lỗi khi xóa: $e',
+                                      icon: Icons.error_outline_rounded,
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      label: const Text('Xóa tài khoản nhân viên này'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -3552,6 +3660,34 @@ class _AdminStaffProfileManagementScreenState
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 90),
         children: [
+          if (widget.fixedFacilityTitle != null &&
+              widget.fixedFacilityTitle!.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.blue50,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.blue100),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.shield_outlined,
+                      color: AppColors.blue700, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Phạm vi cơ sở: ${widget.fixedFacilityTitle}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.blue900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // Tìm kiếm
           TextField(
             controller: _searchController,
@@ -3779,10 +3915,22 @@ class _RoleChip extends StatelessWidget {
 class AdminCreateEmployeeScreen extends StatefulWidget {
   const AdminCreateEmployeeScreen({
     this.embedded = false,
+    this.onCreated,
+    this.allowedRoles,
+    this.fixedRole,
+    this.fixedBranch,
+    this.fixedStoreId,
+    this.fixedWarehouseId,
     super.key,
   });
 
   final bool embedded;
+  final VoidCallback? onCreated;
+  final List<String>? allowedRoles;
+  final String? fixedRole;
+  final String? fixedBranch;
+  final String? fixedStoreId;
+  final String? fixedWarehouseId;
 
   @override
   State<AdminCreateEmployeeScreen> createState() =>
@@ -3790,15 +3938,17 @@ class AdminCreateEmployeeScreen extends StatefulWidget {
 }
 
 class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
+  final EmployeeManagementService _service = EmployeeManagementService();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
 
-  String _selectedRole = 'sales';
-  String _selectedBranch = 'Cửa hàng SSM4 - Quận 1';
+  late String _selectedRole;
+  late String _selectedBranch;
   bool _obscurePassword = true;
   bool _activateImmediately = true;
+  bool _isSubmitting = false;
 
   static const _storeBranches = <String>[
     'Cửa hàng SSM4 - Quận 1',
@@ -3812,11 +3962,30 @@ class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.fixedRole != null && widget.fixedRole!.isNotEmpty) {
+      _selectedRole = widget.fixedRole!;
+    } else if (widget.allowedRoles != null && widget.allowedRoles!.isNotEmpty) {
+      _selectedRole = widget.allowedRoles!.first;
+    } else {
+      _selectedRole = 'sales';
+    }
+
+    if (widget.fixedBranch != null && widget.fixedBranch!.isNotEmpty) {
+      _selectedBranch = widget.fixedBranch!;
+    } else {
+      _selectedBranch = 'Cửa hàng SSM4 - Quận 1';
+    }
+  }
+
+  @override
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
     _passwordCtrl.dispose();
+    _service.dispose();
     super.dispose();
   }
 
@@ -3827,21 +3996,82 @@ class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
     return _storeBranches;
   }
 
-  void _handlePreviewSubmit() {
-    if (_nameCtrl.text.trim().isEmpty || _emailCtrl.text.trim().isEmpty) {
+  Future<void> _handleCreateEmployee() async {
+    final name = _nameCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    final password = _passwordCtrl.text.trim();
+
+    if (name.isEmpty) {
       showSmartMartNotice(
         context,
-        message: 'Vui lòng nhập đầy đủ Họ tên và Email nhân viên.',
+        message: 'Vui lòng nhập Họ và tên nhân viên.',
         icon: Icons.info_outline_rounded,
       );
       return;
     }
-    showSmartMartNotice(
-      context,
-      message:
-          'Đã ghi nhận biểu mẫu tạo tài khoản cho ${_nameCtrl.text.trim()} (${EmployeeRecord.labelForRole(_selectedRole)}).',
-      icon: Icons.person_add_alt_1_rounded,
-    );
+    if (email.isEmpty || !email.contains('@')) {
+      showSmartMartNotice(
+        context,
+        message: 'Vui lòng nhập địa chỉ email hợp lệ.',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+    if (password.length < 6) {
+      showSmartMartNotice(
+        context,
+        message: 'Mật khẩu khởi tạo cần tối thiểu 6 ký tự.',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final newEmp = await _service.createEmployee(
+        fullName: name,
+        email: email,
+        password: password,
+        phone: phone.isNotEmpty ? phone : null,
+        role: _selectedRole,
+        storeId: widget.fixedStoreId,
+        warehouseId: widget.fixedWarehouseId,
+        branch: widget.fixedBranch ?? _selectedBranch,
+        isActive: _activateImmediately,
+      );
+
+      if (!mounted) return;
+
+      // Xóa trắng toàn bộ các ô nhập dữ liệu theo đúng yêu cầu
+      _nameCtrl.clear();
+      _emailCtrl.clear();
+      _phoneCtrl.clear();
+      _passwordCtrl.clear();
+
+      showSmartMartNotice(
+        context,
+        message:
+            'Tạo tài khoản thành công cho ${newEmp.fullName} (${EmployeeRecord.labelForRole(newEmp.role)}) và đã lưu vào SQL!',
+        icon: Icons.check_circle_rounded,
+      );
+
+      // Kích hoạt callback để chuyển tab & nạp lại danh sách nhân viên ngay lập tức
+      widget.onCreated?.call();
+    } catch (e) {
+      if (!mounted) return;
+      showSmartMartNotice(
+        context,
+        message:
+            'Tạo tài khoản thất bại: ${e.toString().replaceAll("Exception:", "").trim()}',
+        icon: Icons.error_outline_rounded,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override
@@ -4005,27 +4235,37 @@ class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
                   prefixIcon: Icon(Icons.badge_outlined),
                   border: OutlineInputBorder(),
                 ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'sales',
-                    child: Text('Nhân viên Bán hàng (POS)'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'store_manager',
-                    child: Text('Quản lý Cửa hàng'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'kho',
-                    child: Text('Nhân viên Kho hàng'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'kho_manager',
-                    child: Text('Quản lý Kho hàng'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'admin',
-                    child: Text('Quản trị viên (Admin)'),
-                  ),
+                items: [
+                  if (widget.allowedRoles == null ||
+                      widget.allowedRoles!.contains('sales'))
+                    const DropdownMenuItem(
+                      value: 'sales',
+                      child: Text('Nhân viên Bán hàng (POS)'),
+                    ),
+                  if (widget.allowedRoles == null ||
+                      widget.allowedRoles!.contains('store_manager'))
+                    const DropdownMenuItem(
+                      value: 'store_manager',
+                      child: Text('Quản lý Cửa hàng'),
+                    ),
+                  if (widget.allowedRoles == null ||
+                      widget.allowedRoles!.contains('kho'))
+                    const DropdownMenuItem(
+                      value: 'kho',
+                      child: Text('Nhân viên Kho hàng'),
+                    ),
+                  if (widget.allowedRoles == null ||
+                      widget.allowedRoles!.contains('kho_manager'))
+                    const DropdownMenuItem(
+                      value: 'kho_manager',
+                      child: Text('Quản lý Kho hàng'),
+                    ),
+                  if (widget.allowedRoles == null ||
+                      widget.allowedRoles!.contains('admin'))
+                    const DropdownMenuItem(
+                      value: 'admin',
+                      child: Text('Quản trị viên (Admin)'),
+                    ),
                 ],
                 onChanged: (v) {
                   if (v != null) {
@@ -4033,7 +4273,53 @@ class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
                   }
                 },
               ),
-              if (!isAdminRole) ...[
+              if (widget.fixedBranch != null &&
+                  widget.fixedBranch!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.lock_rounded,
+                        size: 18,
+                        color: Color(0xFF16A34A),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Cơ sở phân công cố định:',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                            Text(
+                              widget.fixedBranch!,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF15803D),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (!isAdminRole) ...[
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _selectedBranch,
@@ -4082,9 +4368,22 @@ class _AdminCreateEmployeeScreenState extends State<AdminCreateEmployeeScreen> {
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  onPressed: _handlePreviewSubmit,
-                  icon: const Icon(Icons.person_add_alt_1_rounded),
-                  label: const Text('Tạo Tài khoản Nhân viên'),
+                  onPressed: _isSubmitting ? null : _handleCreateEmployee,
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.person_add_alt_1_rounded),
+                  label: Text(
+                    _isSubmitting
+                        ? 'Đang lưu vào SQL Supabase...'
+                        : 'Tạo Tài khoản Nhân viên',
+                  ),
                 ),
               ),
             ],
@@ -4748,9 +5047,11 @@ class _AdminPersonalProfileScreenState
         : '0901 112 222';
     final displayCode = _profile?.code ?? 'NV-ADM-0001';
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-      children: [
+    return SafeArea(
+      bottom: false,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+        children: [
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -4888,6 +5189,7 @@ class _AdminPersonalProfileScreenState
           label: const Text('Đăng xuất tài khoản Admin'),
         ),
       ],
-    );
-  }
+    ),
+  );
+}
 }

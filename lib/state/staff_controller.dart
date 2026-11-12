@@ -148,6 +148,14 @@ class StaffController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Cập nhật thông tin một sản phẩm đã có (không tạo thêm phiếu nhập kho).
+  void updateProduct(Product product) {
+    final index = _products.indexWhere((p) => p.id == product.id);
+    if (index < 0) return;
+    _products[index] = product;
+    notifyListeners();
+  }
+
   /// Cập nhật danh sách sản phẩm khi nạp lại từ backend.
   void updateProducts(List<Product> newProducts) {
     if (newProducts.isNotEmpty) {

@@ -456,6 +456,70 @@ class EmployeeManagementService {
     );
   }
 
+  Future<EmployeeRecord> createEmployee({
+    required String fullName,
+    required String email,
+    required String password,
+    String? phone,
+    required String role,
+    String? storeId,
+    String? warehouseId,
+    String? branch,
+    bool isActive = true,
+  }) async {
+    final normRole = EmployeeRecord.normalizeRole(role);
+    final effectiveStoreId =
+        (normRole == 'store_manager' || normRole == 'sales') ? storeId : null;
+    final effectiveWarehouseId =
+        (normRole == 'kho_manager' || normRole == 'kho') ? warehouseId : null;
+
+    final body = <String, dynamic>{
+      'fullName': fullName.trim(),
+      'email': email.trim(),
+      'password': password.trim(),
+      'phone': (phone ?? '').trim(),
+      'role': normRole,
+      'storeId': effectiveStoreId,
+      'warehouseId': effectiveWarehouseId,
+      'branch': (branch ?? '').trim(),
+      'isActive': isActive,
+    };
+
+    try {
+      final data = await _apiClient.post(
+        ApiConstants.adminEmployees,
+        body: body,
+      );
+      if (data is Map) {
+        final created =
+            EmployeeRecord.fromJson(Map<String, dynamic>.from(data));
+        _cacheSessionEmployee(created);
+        return created;
+      }
+    } catch (e) {
+      debugPrint('Backend createEmployee failed: $e');
+      rethrow;
+    }
+
+    throw const ApiException('Không nhận được dữ liệu nhân viên mới từ hệ thống.');
+  }
+
+  Future<void> deleteEmployee(String id) async {
+    try {
+      await _apiClient.delete(ApiConstants.adminEmployeeById(id));
+      _sessionEmployees.removeWhere((e) => e.id == id);
+    } catch (e) {
+      debugPrint('deleteEmployee backend failed: $e');
+      try {
+        await _supabase.from('employees').delete().eq('id', id);
+        _sessionEmployees.removeWhere((e) => e.id == id);
+      } catch (ex) {
+        debugPrint('deleteEmployee Supabase direct failed: $ex');
+        rethrow;
+      }
+    }
+  }
+
   void _cacheSessionEmployee(EmployeeRecord emp) {
     final idx = _sessionEmployees.indexWhere((e) => e.id == emp.id);
     if (idx >= 0) {

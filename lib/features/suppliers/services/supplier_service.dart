@@ -123,7 +123,7 @@ class SupplierService {
         'address': address.trim(),
       if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
       if (fax != null && fax.trim().isNotEmpty) 'fax': fax.trim(),
-      if (isActive != null) 'isActive': isActive,
+      'isActive': ?isActive,
     };
 
     final data = await _apiClient.put(

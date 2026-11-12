@@ -40,19 +40,9 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
   final _descriptionController = TextEditingController();
   final _imageUrlController = TextEditingController();
 
-  String _selectedCategory = 'Rau củ quả';
+  final String _selectedCategory = 'Rau củ quả';
   String _selectedShelf = 'A1';
   bool _isSubmitting = false;
-
-  static const _categories = [
-    'Rau củ quả',
-    'Sữa & chế phẩm',
-    'Nước giải khát',
-    'Thịt tươi sống',
-    'Gia vị & Đồ khô',
-    'Thực phẩm đông lạnh',
-    'Hàng tiêu dùng',
-  ];
 
   static const _shelves = [
     'A1',
@@ -370,7 +360,11 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _selectedWarehouseId,
+                    // Tạo lại field khi danh sách kho tải xong để nhận kho mặc định.
+                    key: ValueKey(
+                      'warehouse-dropdown-${_warehouses.length}-$_isLoadingWarehouses',
+                    ),
+                    initialValue: _selectedWarehouseId,
                     isExpanded: true,
                     decoration: InputDecoration(
                       labelText: 'Kho nhập hàng (*)',
@@ -455,8 +449,9 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                             hintText: 'VD: 36000',
                           ),
                           validator: (val) {
-                            if (val == null || val.trim().isEmpty)
+                            if (val == null || val.trim().isEmpty) {
                               return 'Vui lòng nhập giá bán';
+                            }
                             if (int.tryParse(
                                   val.replaceAll(RegExp(r'[^0-9]'), ''),
                                 ) ==
@@ -502,7 +497,7 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _selectedShelf,
+                          initialValue: _selectedShelf,
                           decoration: const InputDecoration(
                             labelText: 'Kệ dự kiến',
                             prefixIcon: Icon(Icons.shelves),
@@ -516,8 +511,9 @@ class _KhoAddProductScreenState extends State<KhoAddProductScreen> {
                               )
                               .toList(),
                           onChanged: (val) {
-                            if (val != null)
+                            if (val != null) {
                               setState(() => _selectedShelf = val);
+                            }
                           },
                         ),
                       ),

@@ -3747,6 +3747,11 @@ class _WarehouseStockExportScanScreenState
         ),
         actions: [
           IconButton(
+            tooltip: 'Đổi camera trước/sau',
+            onPressed: _cameraController.switchCamera,
+            icon: const Icon(Icons.cameraswitch_outlined),
+          ),
+          IconButton(
             tooltip: 'Bật/tắt đèn Flash',
             onPressed: _cameraController.toggleTorch,
             icon: const Icon(Icons.flashlight_on_outlined),

@@ -42,7 +42,12 @@ Future<void> main() async {
 
   // Luôn đồng bộ access token với phiên Supabase hiện tại, kể cả khi token được làm mới.
   auth.onAuthStateChange.listen((state) {
-    ApiClient.authToken = state.session?.accessToken;
+    final newToken = state.session?.accessToken;
+    if (newToken != null && newToken.isNotEmpty) {
+      ApiClient.authToken = newToken;
+    } else if (state.event == AuthChangeEvent.signedOut) {
+      ApiClient.authToken = null;
+    }
   });
 
   runApp(const SmartMartApp());
@@ -106,7 +111,17 @@ class _SmartMartAppState extends State<SmartMartApp> {
         onFinished: _finishStartup,
       );
     } else if (!_isLoggedIn) {
-      homeWidget = LoginScreen(onComplete: _completeInitialLogin);
+      homeWidget = LoginScreen(
+        onComplete: _completeInitialLogin,
+        onClose: () {
+          setState(() {
+            _isLoggedIn = true;
+            _userRole = 'CUSTOMER';
+            _userName = 'Khách hàng';
+            _userEmail = '';
+          });
+        },
+      );
     } else if (_showLoginWelcome) {
       homeWidget = WelcomeScreen(
         userName: _userName,
@@ -188,12 +203,16 @@ class _SmartMartAppState extends State<SmartMartApp> {
 
   /// Chỉ lấy tên/email/role từ hồ sơ Java sau khi access token Supabase được xác minh.
   Future<Map<String, String>> _fetchVerifiedProfile() async {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session == null || session.accessToken.isEmpty) {
+    final sessionToken =
+        Supabase.instance.client.auth.currentSession?.accessToken;
+    final activeToken = (sessionToken != null && sessionToken.isNotEmpty)
+        ? sessionToken
+        : ApiClient.authToken;
+    if (activeToken == null || activeToken.isEmpty) {
       throw const FormatException('Không có phiên Supabase đang đăng nhập.');
     }
 
-    ApiClient.authToken = session.accessToken;
+    ApiClient.authToken = activeToken;
     final authService = AuthService();
     try {
       final profile = await authService.getMe();
@@ -241,6 +260,10 @@ class _SmartMartAppState extends State<SmartMartApp> {
     await preferences.setString('session.userEmail', email);
     await preferences.setString('session.userRole', role);
 
+    _store.loadProducts();
+    _store.loadOrders();
+    _staffController.loadFromApi();
+
     if (!mounted) return;
     setState(() {
       _isLoggedIn = true;
@@ -257,7 +280,11 @@ class _SmartMartAppState extends State<SmartMartApp> {
     String email,
     String role,
   ) async {
-    if (Supabase.instance.client.auth.currentSession == null) {
+    final hasSupabaseSession =
+        Supabase.instance.client.auth.currentSession != null;
+    final hasProxyToken =
+        ApiClient.authToken != null && ApiClient.authToken!.isNotEmpty;
+    if (!hasSupabaseSession && !hasProxyToken) {
       ApiClient.authToken = null;
       debugPrint('Bỏ qua callback đăng nhập vì không có Supabase session.');
       return;
@@ -287,7 +314,11 @@ class _SmartMartAppState extends State<SmartMartApp> {
       return;
     }
 
-    if (Supabase.instance.client.auth.currentSession == null) {
+    final hasSupabaseSession =
+        Supabase.instance.client.auth.currentSession != null;
+    final hasProxyToken =
+        ApiClient.authToken != null && ApiClient.authToken!.isNotEmpty;
+    if (!hasSupabaseSession && !hasProxyToken) {
       ApiClient.authToken = null;
       debugPrint('Từ chối tạo phiên UI vì Supabase session không tồn tại.');
       return;
@@ -383,15 +414,16 @@ class _AdminWorkspaceScreenState extends State<AdminWorkspaceScreen> {
       ),
       transitionBuilder: (context, animation, secondaryAnimation, child) =>
           SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(-1, 0),
-              end: Offset.zero,
-            ).animate(
-              CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              ),
-            ),
+            position:
+                Tween<Offset>(
+                  begin: const Offset(-1, 0),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
             child: child,
           ),
     );
@@ -438,20 +470,55 @@ class _AdminWorkspaceScreenState extends State<AdminWorkspaceScreen> {
                 statusBarIconBrightness: Brightness.light,
                 statusBarBrightness: Brightness.dark,
               ),
-              child: Scaffold(
-                backgroundColor: AppColors.canvas,
-                extendBody: true,
-                body: SafeArea(
-                  top: false,
-                  bottom: false,
-                  child: IndexedStack(index: _selectedTab, children: pages),
-                ),
-                bottomNavigationBar: SafeArea(
-                  top: false,
-                  minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                  child: _AdminGlassBottomNavigation(
-                    currentIndex: _selectedTab,
-                    onTap: (index) => setState(() => _selectedTab = index),
+              child: PopScope(
+                canPop: false,
+                onPopInvokedWithResult: (didPop, result) async {
+                  if (didPop) return;
+                  if (_selectedTab != 0) {
+                    setState(() => _selectedTab = 0);
+                    return;
+                  }
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Đăng xuất'),
+                      content: const Text(
+                        'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản Admin không?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: const Text('Hủy'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.red.shade700,
+                          ),
+                          child: const Text('Đăng xuất'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok == true) {
+                    widget.onLogout();
+                  }
+                },
+                child: Scaffold(
+                  backgroundColor: AppColors.canvas,
+                  extendBody: true,
+                  body: SafeArea(
+                    top: false,
+                    bottom: false,
+                    child: IndexedStack(index: _selectedTab, children: pages),
+                  ),
+                  bottomNavigationBar: SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: _AdminGlassBottomNavigation(
+                      currentIndex: _selectedTab,
+                      onTap: (index) => setState(() => _selectedTab = index),
+                    ),
                   ),
                 ),
               ),
@@ -838,31 +905,40 @@ class _RootShellState extends State<RootShell> {
                     ? Brightness.dark
                     : Brightness.light,
               ),
-              child: Scaffold(
-                backgroundColor: AppColors.canvas,
-                extendBody: true,
-                body: SafeArea(
-                  top: _selectedTab != 0,
-                  bottom: false,
-                  child: RefreshIndicator(
-                    color: AppColors.blue700,
-                    onRefresh: widget.store.refreshDemoData,
-                    child: IndexedStack(index: _selectedTab, children: pages),
+              child: PopScope(
+                canPop: _selectedTab == 0,
+                onPopInvokedWithResult: (didPop, result) {
+                  if (didPop) return;
+                  if (_selectedTab != 0) {
+                    setState(() => _selectedTab = 0);
+                  }
+                },
+                child: Scaffold(
+                  backgroundColor: AppColors.canvas,
+                  extendBody: true,
+                  body: SafeArea(
+                    top: _selectedTab != 0,
+                    bottom: false,
+                    child: RefreshIndicator(
+                      color: AppColors.blue700,
+                      onRefresh: widget.store.refreshDemoData,
+                      child: IndexedStack(index: _selectedTab, children: pages),
+                    ),
                   ),
-                ),
-                bottomNavigationBar: SafeArea(
-                  top: false,
-                  minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                  child: _GlassBottomNavigation(
-                    currentIndex: _selectedTab,
-                    cartCount: store.cartCount,
-                    onTap: (index) {
-                      if (index == null) {
-                        _showQrScanner();
-                      } else {
-                        setState(() => _selectedTab = index);
-                      }
-                    },
+                  bottomNavigationBar: SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: _GlassBottomNavigation(
+                      currentIndex: _selectedTab,
+                      cartCount: store.cartCount,
+                      onTap: (index) {
+                        if (index == null) {
+                          _showQrScanner();
+                        } else {
+                          setState(() => _selectedTab = index);
+                        }
+                      },
+                    ),
                   ),
                 ),
               ),

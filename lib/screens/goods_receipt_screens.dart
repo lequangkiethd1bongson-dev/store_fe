@@ -1808,7 +1808,7 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                               ),
                             ),
                           );
-                      if (newSupp != null && mounted) {
+                      if (newSupp != null && mounted && context.mounted) {
                         setState(() {
                           _list.insert(0, newSupp);
                         });

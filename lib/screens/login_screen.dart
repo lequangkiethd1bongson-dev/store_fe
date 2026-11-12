@@ -6,9 +6,14 @@ import 'register_screen.dart';
 
 /// Màn hình đăng nhập riêng biệt (tự động nhận diện role từ tài khoản, không còn chọn role thủ công).
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({required this.onComplete, super.key});
+  const LoginScreen({
+    required this.onComplete,
+    this.onClose,
+    super.key,
+  });
 
   final void Function(String name, String email, String role) onComplete;
+  final VoidCallback? onClose;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -81,7 +86,15 @@ class _LoginScreenState extends State<LoginScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            _LoginHero(onBack: () => Navigator.of(context).maybePop()),
+            _LoginHero(
+              onBack: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else if (widget.onClose != null) {
+                  widget.onClose!();
+                }
+              },
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 24, 22, 28),
               child: Form(

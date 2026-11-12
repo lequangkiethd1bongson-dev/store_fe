@@ -127,13 +127,7 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
 
     final controller = widget.controller;
     if (controller != null) {
-      final index = controller.products.indexWhere(
-        (p) => p.id == updatedProduct.id,
-      );
-      if (index != -1) {
-        controller.products[index] = updatedProduct;
-        controller.notifyListeners();
-      }
+      controller.updateProduct(updatedProduct);
     }
 
     if (widget.onProductUpdated != null) {
@@ -179,8 +173,7 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
 
     final controller = widget.controller;
     if (controller != null) {
-      controller.products.removeWhere((p) => p.id == widget.product.id);
-      controller.notifyListeners();
+      controller.removeProduct(widget.product.id);
     }
 
     if (widget.onProductDeleted != null) {
@@ -249,7 +242,7 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
                           width: 48,
                           height: 48,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
+                          errorBuilder: (_, _, _) => const Icon(
                             Icons.inventory_2_rounded,
                             color: Colors.white,
                           ),
@@ -315,7 +308,7 @@ class _KhoEditProductScreenState extends State<KhoEditProductScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _selectedCategory,
+                    initialValue: _selectedCategory,
                     decoration: const InputDecoration(
                       labelText: 'Danh mục / Nhóm hàng (*)',
                       prefixIcon: Icon(Icons.category_outlined),

@@ -27,27 +27,28 @@ class AuthService {
       throw const ApiException('Vui lòng đăng nhập bằng email.');
     }
 
-    final AuthResponse authResponse;
+    String? accessToken;
     try {
-      authResponse = await Supabase.instance.client.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
+      final authResponse = await Supabase.instance.client.auth
+          .signInWithPassword(email: email, password: password);
 
       final session = authResponse.session;
       debugPrint('SUPABASE LOGIN: ${session != null}');
       debugPrint('SUPABASE USER: ${authResponse.user?.id}');
       debugPrint('ACCESS TOKEN EXISTS: ${session?.accessToken.isNotEmpty}');
+      accessToken = session?.accessToken;
     } on AuthException catch (e) {
       throw ApiException(_friendlyAuthMessage(e));
-    } catch (e, stackTrace) {
-      debugPrint('LOGIN ERROR: $e');
-      debugPrintStack(stackTrace: stackTrace);
-      rethrow;
+    } catch (e) {
+      // Dự phòng tự động khi máy ảo Android bị kẹt DNS ("Failed host lookup: *.supabase.co")
+      // sau khi laptop sleep hoặc đổi mạng Wi-Fi: gọi qua Backend Host (10.0.2.2:8080/api/auth/login)
+      debugPrint(
+        'Direct Supabase DNS/Network failed ($e), falling back to Backend Auth Proxy...',
+      );
+      return _loginViaBackendProxy(email: email, password: password);
     }
 
-    final session = authResponse.session;
-    if (session == null || session.accessToken.isEmpty) {
+    if (accessToken == null || accessToken.isEmpty) {
       throw const ApiException(
         'Không nhận được phiên đăng nhập. Hãy kiểm tra xác nhận email.',
       );
@@ -55,7 +56,7 @@ class AuthService {
 
     debugPrint('BACKEND URL: ${ApiConstants.baseUrl}');
     debugPrint('CALLING BACKEND LOGIN...');
-    ApiClient.authToken = session.accessToken;
+    ApiClient.authToken = accessToken;
 
     try {
       final profile = await getMe();
@@ -81,6 +82,43 @@ class AuthService {
       await _clearSession();
       rethrow;
     }
+  }
+
+  Future<Map<String, dynamic>> _loginViaBackendProxy({
+    required String email,
+    required String password,
+  }) async {
+    ApiClient.authToken = null;
+    final data = await _apiClient.post(
+      ApiConstants.login,
+      body: {'email': email, 'password': password},
+    );
+    if (data is! Map) {
+      throw const ApiException('Phản hồi đăng nhập từ Backend không hợp lệ.');
+    }
+    final map = Map<String, dynamic>.from(data);
+    final token = (map['accessToken'] ?? '').toString().trim();
+    if (token.isEmpty) {
+      throw const ApiException('Không nhận được accessToken từ Backend.');
+    }
+    ApiClient.authToken = token;
+
+    final rawUser = map['user'];
+    if (rawUser is Map) {
+      final profile = Map<String, dynamic>.from(rawUser);
+      final dbRole = (profile['role'] ?? profile['databaseRole'] ?? '')
+          .toString()
+          .toLowerCase();
+      profile['databaseRole'] = dbRole;
+      profile['role'] = _appRoleForDatabaseRole(dbRole);
+      profile['name'] =
+          profile['name']?.toString() ?? profile['fullName']?.toString() ?? '';
+      profile['email'] = profile['email']?.toString() ?? email;
+      return {'user': profile};
+    }
+
+    final profile = await getMe();
+    return {'user': profile};
   }
 
   /// Creates the Supabase Auth user. SQL trigger creates employees with
