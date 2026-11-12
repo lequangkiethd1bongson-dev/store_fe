@@ -182,6 +182,7 @@ class RestockService {
   }) async {
     final body = scannedItems != null && scannedItems.isNotEmpty
         ? <String, dynamic>{
+            'scannedItems': scannedItems,
             'items': scannedItems,
             'barcodes': scannedItems,
           }
